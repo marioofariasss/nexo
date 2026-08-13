@@ -1,0 +1,308 @@
+{
+  "totalAuditado": 614,
+  "contagem": {
+    "candidata_privada_revisao": 121,
+    "fora_escopo_inep": 148,
+    "fora_escopo_publica": 333,
+    "fora_escopo_nao_regular": 12
+  },
+  "amostras": {
+    "candidata_privada_revisao": [
+      {
+        "id": 900961061367,
+        "nome": "ABC CAJUEIRO TORTO"
+      },
+      {
+        "id": 900981255612,
+        "nome": "ANTARES SEDE IRMÃ MARIA"
+      },
+      {
+        "id": 901204065558,
+        "nome": "BERÇÁRIO C.I.D.A. BABY"
+      },
+      {
+        "id": 900435837087,
+        "nome": "BLIVE - ENSINO CRIATIVO"
+      },
+      {
+        "id": 901092522945,
+        "nome": "CENTRINHO PADRE ANTONIOMONTEIRO DA CRUZ"
+      },
+      {
+        "id": 900005739512,
+        "nome": "CENTRO DE ESTUDO ESPEDITO ROSA"
+      },
+      {
+        "id": 900682322320,
+        "nome": "CENTRO EDUCACIONAL BRANCA DE NEVE"
+      },
+      {
+        "id": 900709032023,
+        "nome": "CENTRO EDUCACIONAL CARVALHO BARBOSA"
+      },
+      {
+        "id": 900258381191,
+        "nome": "CENTRO EDUCACIONAL DE REFERÊNCIA PROFESSORA MARIA JOSÉ SANTOS FERREIRA GOMES"
+      },
+      {
+        "id": 904483107847,
+        "nome": "CENTRO JUVENIL DOM BOSCO"
+      },
+      {
+        "id": 904267983595,
+        "nome": "CEPEP"
+      },
+      {
+        "id": 904495719065,
+        "nome": "CHRISTUS PRÉ-UNIVERSITÁRIO"
+      },
+      {
+        "id": 904466658180,
+        "nome": "COLÉGIO 21 EDUCAR"
+      },
+      {
+        "id": 901204067823,
+        "nome": "COLÉGIO AGNUS SUL"
+      },
+      {
+        "id": 900888783329,
+        "nome": "COLÉGIO ANTARES - SEDE PRAIA DE IRACEMA"
+      },
+      {
+        "id": 901947404251,
+        "nome": "COLÉGIO ARGUS"
+      },
+      {
+        "id": 909225676773,
+        "nome": "COLÉGIO ATENEU"
+      },
+      {
+        "id": 904483107849,
+        "nome": "COLÉGIO AUXILIADORA"
+      },
+      {
+        "id": 904476080647,
+        "nome": "COLÉGIO BATISTA INDEPENDENTE"
+      },
+      {
+        "id": 901194775962,
+        "nome": "COLÉGIO CASTRO"
+      }
+    ],
+    "fora_escopo_inep": [
+      {
+        "id": 23068892,
+        "nome": "ASSOCIAÇÃO DOS CEGOS DO ESTADO DO CEARÁ"
+      },
+      {
+        "id": 23070900,
+        "nome": "CENTRO EDUCACIONAL DOM HÉLIO CAMPOS"
+      },
+      {
+        "id": 23074701,
+        "nome": "CENTRO EDUCACIONAL MOEMA TÁVORA"
+      },
+      {
+        "id": 23072865,
+        "nome": "COLÉGIO ESTADUAL JUSTINIANO DE SERPA"
+      },
+      {
+        "id": 23215534,
+        "nome": "COLÉGIO MILITAR DO CORPO DE BOMBEIROS"
+      },
+      {
+        "id": 23263296,
+        "nome": "CRECHE AGOSTINHO MOREIRA E SILVA"
+      },
+      {
+        "id": 23078600,
+        "nome": "CRECHE AIRTON JOSÉ VIDAL QUEIROZ"
+      },
+      {
+        "id": 23064994,
+        "nome": "CRECHE ALMERINDA DE ALBUQUERQUE"
+      },
+      {
+        "id": 23184221,
+        "nome": "CRECHE ANTÔNIO MENDES"
+      },
+      {
+        "id": 23256656,
+        "nome": "CRECHE AUGUSTO PONTES"
+      },
+      {
+        "id": 23064854,
+        "nome": "CRECHE CASA DE AFONSO E MARIA"
+      },
+      {
+        "id": 23073608,
+        "nome": "CRECHE DARCY RIBEIRO"
+      },
+      {
+        "id": 23263130,
+        "nome": "CRECHE JOÃO HILDO DE CARVALHO FURTADO - UNIDADE II"
+      },
+      {
+        "id": 23071850,
+        "nome": "CRECHE JOÃO MENDES DE ANDRADE"
+      },
+      {
+        "id": 23072350,
+        "nome": "CRECHE JOSÉ DIAS MACÊDO"
+      },
+      {
+        "id": 23263334,
+        "nome": "CRECHE LENIRA JUREMA DE MAGALHÃES"
+      },
+      {
+        "id": 23233834,
+        "nome": "CRECHE MARIA TEREZINHA DE CARVALHO HOLANDA"
+      },
+      {
+        "id": 23270560,
+        "nome": "CRECHE MENINO MALUQUINHO"
+      },
+      {
+        "id": 23074876,
+        "nome": "CRECHE MOURA BRASIL"
+      },
+      {
+        "id": 23264209,
+        "nome": "CRECHE ODILON GONZAGA BRAVEZA"
+      }
+    ],
+    "fora_escopo_publica": [
+      {
+        "id": 901274500055,
+        "nome": "CEI ANT. CESÁR PEREIRA PINHEIRO"
+      },
+      {
+        "id": 900421294663,
+        "nome": "CEI CÔNEGO FRANCISCO PEREIRA DA SILVA"
+      },
+      {
+        "id": 900005793442,
+        "nome": "CEI FRANCISCO EDMILSON PINHEIRO - UNIDADE II"
+      },
+      {
+        "id": 901166293814,
+        "nome": "CEI FRANCISCO NOGUEIRA DA SILVA"
+      },
+      {
+        "id": 901109188052,
+        "nome": "CEI MANOEL PINHEIRO DOS SANTOS"
+      },
+      {
+        "id": 901110145304,
+        "nome": "CEI MARIA BEZERRA QUEVEDO"
+      },
+      {
+        "id": 900016206838,
+        "nome": "CEI MARISTELA DA FROTA CAVALCANTE"
+      },
+      {
+        "id": 901275458846,
+        "nome": "CEI PEDRO FERREIRA MESQUITA"
+      },
+      {
+        "id": 900012563985,
+        "nome": "CEI PROFESSOR JOSÉ REBOUÇAS MACAMBIRA"
+      },
+      {
+        "id": 910154776251,
+        "nome": "CEI ROSA AMARO CAVALCANTE"
+      },
+      {
+        "id": 904466527285,
+        "nome": "CEJA (JOSÉ WALTER)"
+      },
+      {
+        "id": 904472820221,
+        "nome": "CEJA (PARANGABA)"
+      },
+      {
+        "id": 900005755488,
+        "nome": "CEJA ADELINO ALCÂNTARA FILHO"
+      },
+      {
+        "id": 906967597179,
+        "nome": "CENTRO DE EDUCAÇÃO DE JOVENS E ADULTOS MÍLTON CUNHA"
+      },
+      {
+        "id": 906967597092,
+        "nome": "CENTRO DE EDUCAÇÃO DE JOVENS E ADULTOS PAULO FREIRE"
+      },
+      {
+        "id": 906967597127,
+        "nome": "CENTRO DE EDUCAÇÃO DE JOVENS E ADULTOS PROFESSOR JOSÉ NEUDSON BRAGA"
+      },
+      {
+        "id": 906967597121,
+        "nome": "CENTRO DE EDUCAÇÃO DE JOVENS E ADULTOS PROFESSORA MARIA EUDES VERAS"
+      },
+      {
+        "id": 900010175276,
+        "nome": "CENTRO DE EDUCAÇÃO INFANTIL ANTÔNIA NATHÁLIA CRISTINA CHAVES MACIEL"
+      },
+      {
+        "id": 901092492797,
+        "nome": "CENTRO DE EDUCAÇÃO INFANTIL JORNALISTA DEMÓCRITO DUMMAR"
+      },
+      {
+        "id": 900661249375,
+        "nome": "CENTRO DE EDUCAÇÃO INFANTIL JORNALISTA NENO CAVALCANTE"
+      }
+    ],
+    "fora_escopo_nao_regular": [
+      {
+        "id": 906700072138,
+        "nome": "CENTRO DE FORMAÇÃO DIVINO SALVADOR"
+      },
+      {
+        "id": 905108564467,
+        "nome": "CENTRO DE LÍNGUAS ESTRANGEIRAS DO CEARÁ"
+      },
+      {
+        "id": 900005704539,
+        "nome": "CENTRO SOCIAL URBANO LÚCIO ALCÂNTARA"
+      },
+      {
+        "id": 901110157064,
+        "nome": "COLÉGIO SEMINÁRIO SERÁFICO NOSSA SENHORA DO BRASIL"
+      },
+      {
+        "id": 901162920371,
+        "nome": "EDIFÍCIO FIRMINA FROTA AGUIAR"
+      },
+      {
+        "id": 901206598362,
+        "nome": "EDUCAÇÃO FUNDAMENTAL II"
+      },
+      {
+        "id": 901083912356,
+        "nome": "ESCOLA DE GASTRONOMIA SOCIAL IVENS DIAS BRANCO"
+      },
+      {
+        "id": 900312627611,
+        "nome": "ESCOLA DE SAÚDE PÚBLICA DO CEARÁ"
+      },
+      {
+        "id": 900499584087,
+        "nome": "ESCOLA DE TRABALHO OFICINA DO SENHOR"
+      },
+      {
+        "id": 911276322620,
+        "nome": "MENDES SURF HOUSE"
+      },
+      {
+        "id": 904470790525,
+        "nome": "QI EDUCAÇÃO PROFISSIONAL"
+      },
+      {
+        "id": 900377752483,
+        "nome": "WIZARD"
+      }
+    ]
+  },
+  "regra": "triagem conservadora; nenhum registro foi apagado"
+}

@@ -1,0 +1,16 @@
+{
+  "versao":"POF-2017-2018",
+  "fonte":"IBGE, Pesquisa de Orcamentos Familiares 2017-2018, Primeiros Resultados",
+  "anoPrecos":"2018",
+  "participacaoEducacaoDespesaConsumoPct":{"Brasil":4.7,"Norte":3.2,"Nordeste":4.7,"Sudeste":5.1,"Sul":3.7,"Centro-Oeste":4.7},
+  "participacaoEducacaoPorRendaFamiliarPct":[
+    {"ate":1908,"valor":2.0},
+    {"de":1908,"ate":2862,"valor":2.6},
+    {"de":2862,"ate":5724,"valor":3.4},
+    {"de":5724,"ate":9540,"valor":4.7},
+    {"de":9540,"ate":14310,"valor":5.3},
+    {"de":14310,"ate":23850,"valor":5.8},
+    {"de":23850,"valor":7.3}
+  ],
+  "observacao":"Faixas de renda sao rendimento familiar total e valores nominais de 2018. Nao devem ser aplicadas diretamente a renda domiciliar per capita de 2022 nem interpretadas como intencao individual de compra."
+}

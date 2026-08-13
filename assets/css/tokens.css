@@ -1,0 +1,61 @@
+:root {
+  /* Paleta baseada na identidade real da kedu ("Sua escola no azul com a
+     kedu") — #003F59 é a theme-color oficial do site kedu.com.br. */
+  --kedu-azul-profundo: #003F59;
+  --kedu-azul: #0B5C7D;
+  --kedu-azul-vivo: #1C8FC7;
+  --nexo-ciano: #4FC3E8;
+
+  --bg-page: #F4F7F9;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F0F4F7;
+  --bg-sidebar: #003F59;
+  --bg-sidebar-2: #063A50;
+
+  --text-primary: #10242E;
+  --text-secondary: #5C7480;
+  --text-muted: #93A5AD;
+  --text-on-sidebar: #F2F8FB;
+  --text-on-sidebar-muted: #9FC5D6;
+
+  --border: #E2E9EC;
+  --border-strong: #CBD8DD;
+
+  --accent: #0B5C7D;
+  --accent-hover: #094C68;
+  --accent-soft: #E6F2F7;
+
+  --icp-alta: #0F8A5F;
+  --icp-media: #C08A1E;
+  --icp-baixa: #93A5AD;
+  --danger: #D14848;
+  --success: #0F8A5F;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --font-sans: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(10,50,70,0.05), 0 1px 1px rgba(10,50,70,0.03);
+  --shadow-card-hover: 0 8px 24px rgba(10,50,70,0.10), 0 2px 6px rgba(10,50,70,0.06);
+  --shadow-drawer: -8px 0 32px rgba(10,50,70,0.14);
+
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-med: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg-page: #0B1A21;
+  --bg-surface: #122A34;
+  --bg-surface-2: #16333F;
+  --bg-sidebar: #041F2C;
+  --bg-sidebar-2: #06283A;
+  --text-primary: #EAF3F7;
+  --text-secondary: #9DBAC5;
+  --text-muted: #6E8A94;
+  --border: #1E3D48;
+  --border-strong: #2C4E5A;
+  --accent: #1C8FC7;
+  --accent-hover: #4FC3E8;
+  --accent-soft: #113645;
+}
