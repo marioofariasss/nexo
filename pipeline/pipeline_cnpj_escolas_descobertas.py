@@ -32,6 +32,10 @@ COL_ESTAB = [
 ]
 COL_MUNICIPIO = ["codigo", "nome"]
 CNAES_EDUCACAO_BASICA = ("8511", "8512", "8513", "8520")
+UFS_BRASIL = {
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+    "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+}
 
 
 def valor(campo) -> str:
@@ -39,9 +43,18 @@ def valor(campo) -> str:
 
 
 def normalizar(texto: str) -> str:
-    texto = "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
+    texto = valor(texto)
+    texto = "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
     texto = re.sub(r"\b(COLEGIO|ESCOLA|CENTRO|EDUCACIONAL|EDUCACAO|ENSINO|LTDA|EIRELI|SA)\b", " ", texto.upper())
     return " ".join(re.sub(r"[^A-Z0-9 ]", " ", texto).split())
+
+
+def normalizar_uf(uf: str) -> str:
+    texto = valor(uf).strip().upper()
+    if texto in UFS_BRASIL:
+        return texto
+    final = re.search(r"(?:^|[ ,/-])([A-Z]{2})$", texto)
+    return final.group(1) if final and final.group(1) in UFS_BRASIL else texto
 
 
 def arquivos(pasta: Path, termo: str) -> list[Path]:
@@ -60,14 +73,18 @@ def carregar_escolas(pasta_escolas: Path, arquivo_escolas: Path | None = None) -
     resultado = []
     if arquivo_escolas:
         documento = json.loads(arquivo_escolas.read_text(encoding="utf-8"))
-        registros = documento.get("escolas", documento if isinstance(documento, list) else [])
+        registros = documento if isinstance(documento, list) else documento.get("escolas", [])
         for escola in registros:
-            if escola.get("fonte") == "osm" and escola.get("qualidadeIdentidade", {}).get("incluirAnalise", True):
+            qualidade = escola.get("qualidadeIdentidade") or {}
+            if escola.get("fonte") == "osm" and qualidade.get("incluirAnalise", True):
+                escola = {**escola, "uf": normalizar_uf(escola.get("uf"))}
                 resultado.append(escola)
         return resultado
     for caminho in pasta_escolas.glob("*.json"):
         for escola in json.loads(caminho.read_text(encoding="utf-8")):
-            if escola.get("fonte") == "osm" and escola.get("qualidadeIdentidade", {}).get("incluirAnalise", True):
+            qualidade = escola.get("qualidadeIdentidade") or {}
+            if escola.get("fonte") == "osm" and qualidade.get("incluirAnalise", True):
+                escola = {**escola, "uf": normalizar_uf(escola.get("uf"))}
                 resultado.append(escola)
     return resultado
 
@@ -188,13 +205,15 @@ def main() -> None:
             cnpj = f"{row['cnpjBasico']}{row['ordem']}{row['dv']}"
             encontrados.append({
                 "cnpj": cnpj,
-                "nomeFantasia": row.get("nomeFantasia") or "",
-                "razaoSocial": row.get("razaoSocial") or "",
-                "cnae": row.get("cnaePrincipal") or "",
+                "nomeFantasia": valor(row.get("nomeFantasia")),
+                "razaoSocial": valor(row.get("razaoSocial")),
+                "cnae": valor(row.get("cnaePrincipal")),
                 "cnaesSecundarios": valor(row.get("cnaesSecundarios")),
-                "cep": row.get("cep") or "",
-                "bairro": row.get("bairro") or "",
-                "logradouro": " ".join(str(row.get(k) or "") for k in ["tipoLogradouro", "logradouro", "numero"]).strip(),
+                "cep": valor(row.get("cep")),
+                "bairro": valor(row.get("bairro")),
+                "logradouro": " ".join(
+                    valor(row.get(k)) for k in ["tipoLogradouro", "logradouro", "numero"]
+                ).strip(),
                 "telefone": " / ".join(filter(None, [
                     f"({valor(row.get('ddd1'))}) {valor(row.get('telefone1'))}" if valor(row.get('telefone1')) else "",
                     f"({valor(row.get('ddd2'))}) {valor(row.get('telefone2'))}" if valor(row.get('telefone2')) else "",

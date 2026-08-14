@@ -125,7 +125,19 @@ function candidatoCnpjAltaConfianca(escola) {
 
 /** Valida na BrasilAPI e aplica apenas candidatos com nome+endereço fortes. */
 export async function aplicarCnpjsAltaConfianca(escolas, onProgress = null) {
-  const alvos = escolas.filter((e) => e.fonte === 'osm' && !e.cnpj && candidatoCnpjAltaConfianca(e));
+  const elegiveis = escolas.filter((e) => e.fonte === 'osm' && !e.cnpj && candidatoCnpjAltaConfianca(e));
+  const ocorrenciasCnpj = new Map();
+  elegiveis.forEach((escola) => {
+    const cnpj = String(candidatoCnpjAltaConfianca(escola)?.cnpj || '').replace(/\D/g, '');
+    ocorrenciasCnpj.set(cnpj, (ocorrenciasCnpj.get(cnpj) || 0) + 1);
+  });
+  // Um mesmo CNPJ sugerido para mais de um pin OSM normalmente indica
+  // cadastro duplicado ou unidade/mantenedora ambígua. Esses casos ficam
+  // para revisão humana em vez de criarem escolas enriquecidas duplicadas.
+  const alvos = elegiveis.filter((escola) => {
+    const cnpj = String(candidatoCnpjAltaConfianca(escola)?.cnpj || '').replace(/\D/g, '');
+    return ocorrenciasCnpj.get(cnpj) === 1;
+  });
   const alteradas = [];
   const falhas = [];
   for (let i = 0; i < alvos.length; i += 1) {
@@ -156,5 +168,10 @@ export async function aplicarCnpjsAltaConfianca(escolas, onProgress = null) {
     if (onProgress) onProgress({ atual: i + 1, total: alvos.length, aplicadas: alteradas.length, falhas: falhas.length });
   }
   if (alteradas.length) await bulkPut('escolas', alteradas);
-  return { candidatas: alvos.length, aplicadas: alteradas.length, falhas };
+  return {
+    candidatas: alvos.length,
+    aplicadas: alteradas.length,
+    falhas,
+    duplicadasIgnoradas: elegiveis.length - alvos.length,
+  };
 }

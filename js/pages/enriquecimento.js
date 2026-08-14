@@ -259,7 +259,7 @@ async function aplicarAltaConfianca() {
     const resultado = await aplicarCnpjsAltaConfianca(todasCarregadas, ({ atual, total, aplicadas }) => {
       msg.textContent = `Validando ${fmtInt(atual)} de ${fmtInt(total)} PJs de alta confiança · ${fmtInt(aplicadas)} aplicadas...`;
     });
-    msg.textContent = `${fmtInt(resultado.aplicadas)} CNPJs validados e aplicados; ${fmtInt(resultado.falhas.length)} rejeitados/indisponíveis; ${fmtInt(resultado.candidatas)} candidatos avaliados.`;
+    msg.textContent = `${fmtInt(resultado.aplicadas)} CNPJs validados e aplicados; ${fmtInt(resultado.falhas.length)} rejeitados/indisponíveis; ${fmtInt(resultado.candidatas)} candidatos únicos avaliados; ${fmtInt(resultado.duplicadasIgnoradas)} sugestões duplicadas mantidas para revisão manual.`;
     await carregarTudoLocal();
     aplicarFiltro('osm');
   } catch (err) { msg.textContent = `Erro: ${err.message}`; }
