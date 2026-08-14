@@ -28,8 +28,6 @@ jobs:
     env:
       FILA: ${{ inputs.arquivo_fila || 'data/enriquecimento/fila_cnpj.json' }}
       SNAPSHOT: ${{ inputs.snapshot || 'latest' }}
-      RECEITA_CACHE: ${{ runner.temp }}/receita-cnpj
-      CANDIDATOS_TMP: ${{ runner.temp }}/cnpj-candidatos
     steps:
       - name: Baixar o código
         uses: actions/checkout@v4
@@ -49,12 +47,12 @@ jobs:
         run: pip install --disable-pip-version-check -r pipeline/requirements-cnpj.txt
 
       - name: Baixar snapshot oficial em disco temporário
-        run: python pipeline/baixar_base_cnpj_receita.py --snapshot "$SNAPSHOT" --destino "$RECEITA_CACHE" --workers 6
+        run: python pipeline/baixar_base_cnpj_receita.py --snapshot "$SNAPSHOT" --destino "$RUNNER_TEMP/receita-cnpj" --workers 6
 
       - name: Localizar o snapshot baixado
         shell: bash
         run: |
-          RECEITA_DIR="$(find "$RECEITA_CACHE" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          RECEITA_DIR="$(find "$RUNNER_TEMP/receita-cnpj" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -n "$RECEITA_DIR"
           echo "RECEITA_DIR=$RECEITA_DIR" >> "$GITHUB_ENV"
           echo "SNAPSHOT_REAL=$(basename "$RECEITA_DIR")" >> "$GITHUB_ENV"
@@ -65,16 +63,16 @@ jobs:
           python pipeline/pipeline_cnpj_escolas_descobertas.py \
             --pasta-receita "$RECEITA_DIR" \
             --arquivo-escolas "$FILA" \
-            --saida "$CANDIDATOS_TMP" \
+            --saida "$RUNNER_TEMP/cnpj-candidatos" \
             --snapshot "$SNAPSHOT_REAL"
-          python pipeline/validar_candidatos_cnpj.py "$CANDIDATOS_TMP" | tee resultado-cnpj.txt
+          python pipeline/validar_candidatos_cnpj.py "$RUNNER_TEMP/cnpj-candidatos" | tee resultado-cnpj.txt
           cat resultado-cnpj.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publicar somente resultados compactos
         shell: bash
         run: |
           mkdir -p data/cnpj_candidatos
-          cp "$CANDIDATOS_TMP"/*.json data/cnpj_candidatos/
+          cp "$RUNNER_TEMP/cnpj-candidatos"/*.json data/cnpj_candidatos/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/cnpj_candidatos
@@ -87,4 +85,4 @@ jobs:
 
       - name: Confirmar descarte da base bruta
         if: always()
-        run: echo "O runner e $RECEITA_CACHE serão descartados automaticamente ao final do job." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "O runner e $RUNNER_TEMP/receita-cnpj serão descartados automaticamente ao final do job." >> "$GITHUB_STEP_SUMMARY"
