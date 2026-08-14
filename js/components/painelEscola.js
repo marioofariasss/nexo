@@ -194,8 +194,15 @@ function renderVisaoGeral() {
 function renderContato() {
   const { escola, crm, enriquecimento } = estado;
   const painel = document.getElementById('painel-contato');
-  const dados = crm.marketingDigital || {};
-  const whatsappInstitucionalUrl = escola.tel ? `https://wa.me/55${String(escola.ddd || '').replace(/\D/g, '')}${String(escola.tel).replace(/\D/g, '')}` : null;
+  const dados = { site: escola.site || '', instagram: escola.instagram || '', ...(crm.marketingDigital || {}) };
+  const emailInstitucional = enriquecimento?.email || escola.email || '';
+  const telefoneInstitucional = escola.tel || enriquecimento?.telefone || '';
+  const consultaBase = encodeURIComponent(`"${escola.nome}" "${escola.municipio}" ${escola.uf || ''}`);
+  const telefoneWhatsApp = String(telefoneInstitucional).split('/')[0].replace(/\D/g, '');
+  const telefoneComPais = telefoneWhatsApp.length <= 9
+    ? `55${String(escola.ddd || '').replace(/\D/g, '')}${telefoneWhatsApp}`
+    : telefoneWhatsApp.length <= 11 ? `55${telefoneWhatsApp}` : telefoneWhatsApp;
+  const whatsappInstitucionalUrl = telefoneWhatsApp ? `https://wa.me/${telefoneComPais}` : null;
 
   painel.innerHTML = `
     <div class="drawer-section">
@@ -208,8 +215,8 @@ function renderContato() {
     <div class="drawer-section">
       <h3>Canais</h3>
       <div class="info-grid">
-        <div><span class="k">Telefone:</span> ${escola.tel ? `<a href="tel:${escola.ddd || ''}${escola.tel}"><i class="fa-solid fa-phone"></i> ${escola.ddd ? `(${escola.ddd}) ` : ''}${escola.tel}</a>` : '-'}</div>
-        <div><span class="k">E-mail institucional:</span> ${enriquecimento?.email ? `<a href="mailto:${enriquecimento.email}"><i class="fa-solid fa-envelope"></i> ${enriquecimento.email}</a>` : '-'}</div>
+        <div><span class="k">Telefone:</span> ${telefoneInstitucional ? `<a href="tel:${String(telefoneInstitucional).replace(/[^\d+]/g, '')}"><i class="fa-solid fa-phone"></i> ${escola.ddd && escola.tel ? `(${escola.ddd}) ` : ''}${telefoneInstitucional}</a>` : '-'}</div>
+        <div><span class="k">E-mail institucional:</span> ${emailInstitucional ? `<a href="mailto:${emailInstitucional}"><i class="fa-solid fa-envelope"></i> ${emailInstitucional}</a>` : '-'}</div>
         <div><span class="k">Site:</span> ${dados.site ? `<a href="${dados.site}" target="_blank" rel="noopener">${dados.site}</a>` : '-'}</div>
         <div><span class="k">Instagram:</span> ${dados.instagram ? `<a href="${dados.instagram}" target="_blank" rel="noopener">${dados.instagram}</a>` : '-'}</div>
       </div>
@@ -219,6 +226,13 @@ function renderContato() {
       <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;" id="texto-busca-automatica">Carregando...</p>
       <button class="btn" id="btn-buscar-social">Buscar automaticamente</button>
       <span class="loading-bar" id="msg-busca-social"></span>
+      <p class="sub" style="margin-top:10px;">Investigação gratuita assistida:
+        <a href="https://www.google.com/search?q=${consultaBase}" target="_blank" rel="noopener">web</a> ·
+        <a href="https://www.google.com/maps/search/?api=1&query=${consultaBase}" target="_blank" rel="noopener">Google Maps</a> ·
+        <a href="https://www.google.com/search?q=site%3Ainstagram.com+${consultaBase}" target="_blank" rel="noopener">Instagram</a> ·
+        <a href="https://www.google.com/search?q=site%3Afacebook.com+${consultaBase}" target="_blank" rel="noopener">Facebook</a> ·
+        <a href="https://www.google.com/search?q=site%3Alinkedin.com+${consultaBase}" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
     </div>
     <div class="drawer-section">
       <h3>Editar links</h3>
@@ -279,6 +293,8 @@ function renderInstitucional() {
             <div class="interacao-item" style="margin-top:8px;">
               <div><strong>${c.nomeFantasia || c.razaoSocial || c.cnpj}</strong> <span class="badge">${c.score}% de aderência</span></div>
               <div class="meta">${c.razaoSocial || ''}${c.cnae ? ` · CNAE ${c.cnae}` : ''}${c.cep ? ` · CEP ${c.cep}` : ''}</div>
+              ${(c.telefone || c.email) ? `<div class="meta">Contato público da Receita: ${c.telefone || 'sem telefone'}${c.email ? ` · ${c.email}` : ''}</div>` : ''}
+              ${(c.porteJuridico || c.capitalSocial) ? `<div class="meta">Porte jurídico: ${c.porteJuridico || '-'} · capital social: ${c.capitalSocial || '-'}</div>` : ''}
               <div class="meta">CNPJ ${c.cnpj} · ${(c.evidencias || []).join(' · ')}</div>
               <button class="btn" data-aplicar-cnpj="${indice}" style="margin-top:6px;">Confirmar e aplicar este CNPJ</button>
             </div>
@@ -458,6 +474,19 @@ async function buscarCnpjEAtualizar(forcar) {
   if (msg) msg.textContent = 'Buscando...';
   try {
     estado.enriquecimento = await buscarDadosCnpj(estado.escola.cnpj, { forcarAtualizacao: forcar });
+    let escolaAlterada = false;
+    if (!estado.escola.tel && estado.enriquecimento.telefone) { estado.escola.tel = estado.enriquecimento.telefone.split('/')[0].trim(); escolaAlterada = true; }
+    if (!estado.escola.email && estado.enriquecimento.email) { estado.escola.email = estado.enriquecimento.email; escolaAlterada = true; }
+    estado.escola.dadosPJ = {
+      razaoSocial: estado.enriquecimento.razaoSocial,
+      nomeFantasia: estado.enriquecimento.nomeFantasia,
+      situacaoCadastral: estado.enriquecimento.situacaoCadastral,
+      capitalSocial: estado.enriquecimento.capitalSocial,
+      naturezaJuridica: estado.enriquecimento.naturezaJuridica,
+      fonte: 'Receita Federal/BrasilAPI',
+    };
+    escolaAlterada = true;
+    if (escolaAlterada) await put('escolas', estado.escola);
     renderInstitucional();
     renderVisaoGeral();
     renderContato();

@@ -4,7 +4,9 @@ import { buscarEscolas, encontrarDuplicidadesNaBase, deletarEscola } from '../se
 import { importarTodasUFs, statusBaseCarregada } from '../services/importService.js';
 import { estatisticasCompletude, calcularCompletude } from '../services/dataQualityService.js';
 import { abrirPainelEscola } from '../components/painelEscola.js';
-import { exportarCsv } from '../utils/csv.js';
+import { exportarCsv, baixarJson } from '../utils/csv.js';
+import { processarFilaEnriquecimento, aplicarCnpjsAltaConfianca } from '../services/enrichmentBatchService.js';
+import { importarCandidatosCnpj } from '../services/cnpjCandidateService.js';
 
 montarLayout({ paginaAtiva: 'enriquecimento', titulo: 'Central de Enriquecimento', prefixo: '../' });
 const content = document.getElementById('content');
@@ -28,6 +30,23 @@ function skeleton() {
     </div>
 
     <div class="kpis" id="kpis-completude"></div>
+
+    <div class="card">
+      <h2><i class="fa-solid fa-gears"></i> Esteira das escolas mapeadas</h2>
+      <p class="sub">Processa todas as descobertas, vincula automaticamente códigos INEP exatos e organiza os casos restantes entre revisão INEP, revisão de CNPJ e pesquisa de contato.</p>
+      <div class="filters" style="margin-top:12px;">
+        <div><button class="btn btn-primary" id="btn-processar-fila">Analisar todas as escolas mapeadas</button></div>
+        <div><button class="btn" id="btn-exportar-fila">Exportar fila para o pipeline da Receita</button></div>
+        <div><button class="btn" id="btn-aplicar-cnpj-alta">Validar e aplicar CNPJs de alta confiança</button></div>
+        <div>
+          <label class="btn" for="f-importar-candidatos" style="cursor:pointer;">Importar resultados da Receita</label>
+          <input type="file" id="f-importar-candidatos" accept="application/json" multiple class="hidden">
+        </div>
+      </div>
+      <p class="loading-bar" id="msg-processamento-fila"></p>
+      <div class="kpis" id="kpis-fila" style="margin-top:12px;"></div>
+      <p class="sub" style="margin-top:10px;">Fluxo: exportar JSON → executar <code>baixar_base_cnpj_receita.py</code> e <code>pipeline_cnpj_escolas_descobertas.py</code> → importar os arquivos por UF → validar os CNPJs fortes. O pipeline filtra PJs educacionais ativas e compara nome fantasia/razão social, município, endereço, CEP, telefone e e-mail.</p>
+    </div>
 
     <div class="dash-section-header"><i class="fa-solid fa-filter"></i> Filtrar por lacuna</div>
     <div class="filters">
@@ -57,7 +76,7 @@ function skeleton() {
       <p class="sub" id="contagem-resultado"></p>
       <div class="table-scroll">
         <table class="data-table">
-          <thead><tr><th>Escola</th><th>UF</th><th>Município</th><th>Origem</th><th>Triagem de identidade</th><th>Completude</th><th>CNPJ</th><th>Telefone</th></tr></thead>
+          <thead><tr><th>Escola</th><th>UF</th><th>Município</th><th>Origem</th><th>Próxima ação</th><th>Completude</th><th>CNPJ</th><th>Telefone</th></tr></thead>
           <tbody id="tbody-enriq"></tbody>
         </table>
       </div>
@@ -90,6 +109,32 @@ function renderKPIs() {
     <div class="kpi"><div class="label"><i class="fa-solid fa-magnifying-glass"></i> Candidatas privadas a revisar</div><div class="value">${fmtInt(candidatas)}</div></div>
     <div class="kpi"><div class="label"><i class="fa-solid fa-filter-circle-xmark"></i> Fora do escopo nas análises</div><div class="value">${fmtInt(foraEscopo)}</div></div>
   `;
+  renderKpisFila();
+}
+
+const LABEL_ETAPA = {
+  vinculada_inep: 'Vinculadas ao INEP', cnpj_identificado: 'CNPJ identificado',
+  revisar_inep: 'Revisar vínculo INEP', revisar_cnpj: 'Revisar CNPJ',
+  aguardando_pesquisa: 'Pesquisar PJ/contato', fora_escopo: 'Fora do escopo',
+};
+
+function renderKpisFila() {
+  const descobertas = todasCarregadas.filter((e) => e.fonte === 'osm');
+  const contagem = {};
+  descobertas.forEach((e) => {
+    const etapa = e.enriquecimentoFila?.etapa || 'nao_processada';
+    contagem[etapa] = (contagem[etapa] || 0) + 1;
+  });
+  document.getElementById('kpis-fila').innerHTML = `
+    <div class="kpi"><div class="label">Mapeadas</div><div class="value">${fmtInt(descobertas.length)}</div></div>
+    <div class="kpi"><div class="label">Mapeadas com CNPJ</div><div class="value">${fmtInt(descobertas.filter((e) => e.cnpj).length)}</div></div>
+    <div class="kpi"><div class="label">Com contato público</div><div class="value">${fmtInt(descobertas.filter((e) => e.tel || e.email).length)}</div></div>
+    <div class="kpi"><div class="label">Com site/mídia</div><div class="value">${fmtInt(descobertas.filter((e) => e.site || e.instagram).length)}</div></div>
+    <div class="kpi"><div class="label">Com matrículas</div><div class="value">${fmtInt(descobertas.filter((e) => e.mat25 != null).length)}</div></div>
+    <div class="kpi"><div class="label">Vinculadas ao INEP</div><div class="value">${fmtInt(contagem.vinculada_inep || 0)}</div></div>
+    <div class="kpi"><div class="label">Revisar INEP/CNPJ</div><div class="value">${fmtInt((contagem.revisar_inep || 0) + (contagem.revisar_cnpj || 0))}</div></div>
+    <div class="kpi"><div class="label">Pesquisar PJ/contato</div><div class="value">${fmtInt((contagem.aguardando_pesquisa || 0) + (contagem.nao_processada || 0))}</div></div>
+  `;
 }
 
 function aplicarFiltro(tipo) {
@@ -115,7 +160,7 @@ function aplicarFiltro(tipo) {
     return `<tr data-id="${e.id}" style="cursor:pointer;">
       <td>${e.nome}</td><td>${e.uf || '-'}</td><td>${e.municipio || '-'}</td>
       <td>${e.fonte === 'osm' ? 'OpenStreetMap' : 'Censo INEP'}</td>
-      <td>${e.qualidadeIdentidade?.status ? e.qualidadeIdentidade.status.replaceAll('_', ' ') : '-'}</td>
+      <td>${e.fonte === 'osm' ? (LABEL_ETAPA[e.enriquecimentoFila?.etapa] || 'Ainda não processada') : (e.qualidadeIdentidade?.status ? e.qualidadeIdentidade.status.replaceAll('_', ' ') : 'Base oficial')}</td>
       <td>${c.nivel} (${c.percentual}%)</td>
       <td>${e.cnpj ? '<i class="fa-solid fa-check" style="color:var(--icp-alta);"></i>' : '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i>'}</td>
       <td>${e.tel ? '<i class="fa-solid fa-check" style="color:var(--icp-alta);"></i>' : '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i>'}</td>
@@ -200,6 +245,69 @@ function ligarFiltros() {
       { chave: 'ddd', titulo: 'DDD' }, { chave: 'endereco', titulo: 'Endereço' },
     ], 'enriquecimento_escolas');
   });
+  document.getElementById('btn-processar-fila').addEventListener('click', processarFila);
+  document.getElementById('btn-exportar-fila').addEventListener('click', exportarFilaPipeline);
+  document.getElementById('btn-aplicar-cnpj-alta').addEventListener('click', aplicarAltaConfianca);
+  document.getElementById('f-importar-candidatos').addEventListener('change', importarResultadosReceita);
+}
+
+async function aplicarAltaConfianca() {
+  const btn = document.getElementById('btn-aplicar-cnpj-alta');
+  const msg = document.getElementById('msg-processamento-fila');
+  btn.disabled = true;
+  try {
+    const resultado = await aplicarCnpjsAltaConfianca(todasCarregadas, ({ atual, total, aplicadas }) => {
+      msg.textContent = `Validando ${fmtInt(atual)} de ${fmtInt(total)} PJs de alta confiança · ${fmtInt(aplicadas)} aplicadas...`;
+    });
+    msg.textContent = `${fmtInt(resultado.aplicadas)} CNPJs validados e aplicados; ${fmtInt(resultado.falhas.length)} rejeitados/indisponíveis; ${fmtInt(resultado.candidatas)} candidatos avaliados.`;
+    await carregarTudoLocal();
+    aplicarFiltro('osm');
+  } catch (err) { msg.textContent = `Erro: ${err.message}`; }
+  finally { btn.disabled = false; }
+}
+
+async function processarFila() {
+  const btn = document.getElementById('btn-processar-fila');
+  const msg = document.getElementById('msg-processamento-fila');
+  btn.disabled = true;
+  try {
+    const status = await statusBaseCarregada();
+    if (!status.todasCarregadas) {
+      await importarTodasUFs((p) => { msg.textContent = `Preparando base oficial para o cruzamento: ${p.uf}...`; });
+      todasCarregadas = await buscarEscolas({});
+    }
+    const resultado = await processarFilaEnriquecimento(todasCarregadas, ({ atual, total }) => {
+      msg.textContent = `Analisando ${fmtInt(atual)} de ${fmtInt(total)} escolas mapeadas...`;
+    });
+    msg.textContent = `Concluído: ${fmtInt(resultado.total)} escolas organizadas por próxima ação.`;
+    await carregarTudoLocal();
+    aplicarFiltro('osm');
+  } catch (err) {
+    msg.textContent = `Erro: ${err.message}`;
+  } finally { btn.disabled = false; }
+}
+
+function exportarFilaPipeline() {
+  const escolas = todasCarregadas.filter((e) => e.fonte === 'osm');
+  baixarJson({
+    tipo: 'nexo_fila_enriquecimento', versao: 1,
+    exportadoEm: new Date().toISOString(), total: escolas.length, escolas,
+  }, `nexo_fila_enriquecimento_${new Date().toISOString().slice(0, 10)}`);
+  document.getElementById('msg-processamento-fila').textContent = `${fmtInt(escolas.length)} escolas exportadas para enriquecimento externo.`;
+}
+
+async function importarResultadosReceita(evento) {
+  const arquivos = [...(evento.target.files || [])];
+  if (!arquivos.length) return;
+  const msg = document.getElementById('msg-processamento-fila');
+  try {
+    const documentos = await Promise.all(arquivos.map(async (arquivo) => JSON.parse(await arquivo.text())));
+    const resultado = await importarCandidatosCnpj(documentos);
+    msg.textContent = `${resultado.arquivos} arquivo(s) importado(s), com candidatos para ${fmtInt(resultado.escolasComCandidatos)} escolas. Processando a fila novamente...`;
+    await processarFila();
+  } catch (err) {
+    msg.textContent = `Erro ao importar: ${err.message}`;
+  } finally { evento.target.value = ''; }
 }
 
 async function ligarImportacao() {

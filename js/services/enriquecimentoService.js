@@ -15,10 +15,10 @@ import { getById, put } from './db.js';
 const BRASILAPI_BASE = 'https://brasilapi.com.br/api/cnpj/v1/';
 
 function limparCnpj(cnpj) {
-  const digitos = String(cnpj || '').replace(/\D/g, '');
+  const identificador = String(cnpj || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   // O JSON semente preserva alguns CNPJs como número; nesse formato o zero
   // inicial desaparece. Recompõe os 14 dígitos antes da consulta pública.
-  return digitos && digitos.length < 14 ? digitos.padStart(14, '0') : digitos;
+  return /^\d+$/.test(identificador) && identificador.length < 14 ? identificador.padStart(14, '0') : identificador;
 }
 
 export async function getEnriquecimentoCache(cnpj) {
@@ -38,7 +38,7 @@ export async function buscarDadosCnpj(cnpj, { forcarAtualizacao = false } = {}) 
 
   let resposta;
   try {
-    resposta = await fetch(`${BRASILAPI_BASE}${cnpjLimpo}`);
+    resposta = await fetch(`${BRASILAPI_BASE}${encodeURIComponent(cnpjLimpo)}`);
   } catch (erroRede) {
     throw new Error('Não foi possível conectar à base pública de CNPJ agora. Verifique sua conexão e tente novamente.');
   }

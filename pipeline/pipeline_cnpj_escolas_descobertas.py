@@ -34,6 +34,10 @@ COL_MUNICIPIO = ["codigo", "nome"]
 CNAES_EDUCACAO_BASICA = ("8511", "8512", "8513", "8520")
 
 
+def valor(campo) -> str:
+    return "" if campo is None or pd.isna(campo) else str(campo)
+
+
 def normalizar(texto: str) -> str:
     texto = "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
     texto = re.sub(r"\b(COLEGIO|ESCOLA|CENTRO|EDUCACIONAL|EDUCACAO|ENSINO|LTDA|EIRELI|SA)\b", " ", texto.upper())
@@ -52,11 +56,18 @@ def ler_municipios(pasta: Path) -> dict[str, str]:
     return dict(zip(df.codigo.str.zfill(4), df.nome.fillna('').map(normalizar)))
 
 
-def carregar_escolas(pasta_escolas: Path) -> list[dict]:
+def carregar_escolas(pasta_escolas: Path, arquivo_escolas: Path | None = None) -> list[dict]:
     resultado = []
+    if arquivo_escolas:
+        documento = json.loads(arquivo_escolas.read_text(encoding="utf-8"))
+        registros = documento.get("escolas", documento if isinstance(documento, list) else [])
+        for escola in registros:
+            if escola.get("fonte") == "osm" and escola.get("qualidadeIdentidade", {}).get("incluirAnalise", True):
+                resultado.append(escola)
+        return resultado
     for caminho in pasta_escolas.glob("*.json"):
         for escola in json.loads(caminho.read_text(encoding="utf-8")):
-            if escola.get("fonte") == "osm" and escola.get("qualidadeIdentidade", {}).get("status") == "candidata_privada_revisao":
+            if escola.get("fonte") == "osm" and escola.get("qualidadeIdentidade", {}).get("incluirAnalise", True):
                 resultado.append(escola)
     return resultado
 
@@ -67,7 +78,11 @@ def filtrar_estabelecimentos(pasta: Path, ufs: set[str]) -> pd.DataFrame:
         print(f"Lendo estabelecimentos: {caminho.name}")
         for chunk in pd.read_csv(caminho, sep=";", encoding="latin1", header=None, names=COL_ESTAB, dtype=str, chunksize=250_000, low_memory=False):
             cnae = chunk.cnaePrincipal.fillna('')
-            mask = chunk.uf.isin(ufs) & chunk.situacao.eq('02') & cnae.str.startswith(CNAES_EDUCACAO_BASICA)
+            cnaes_secundarios = chunk.cnaesSecundarios.fillna('')
+            tem_cnae_educacional = cnae.str.startswith(CNAES_EDUCACAO_BASICA) | cnaes_secundarios.str.contains(
+                r"(?:^|,)(?:8511|8512|8513|8520)", regex=True
+            )
+            mask = chunk.uf.isin(ufs) & chunk.situacao.eq('02') & tem_cnae_educacional
             selecionados = chunk.loc[mask].copy()
             if not selecionados.empty:
                 partes.append(selecionados)
@@ -76,22 +91,33 @@ def filtrar_estabelecimentos(pasta: Path, ufs: set[str]) -> pd.DataFrame:
     return pd.concat(partes, ignore_index=True)
 
 
-def carregar_razoes(pasta: Path, bases: set[str]) -> dict[str, str]:
-    razoes = {}
+def carregar_empresas(pasta: Path, bases: set[str]) -> dict[str, dict]:
+    empresas = {}
     for caminho in arquivos(pasta, "EMPRE"):
         print(f"Lendo empresas: {caminho.name}")
         for chunk in pd.read_csv(caminho, sep=";", encoding="latin1", header=None, names=COL_EMPRESA, dtype=str, chunksize=250_000, low_memory=False):
             trecho = chunk[chunk.cnpjBasico.isin(bases)]
-            razoes.update(zip(trecho.cnpjBasico, trecho.razaoSocial.fillna('')))
-    return razoes
+            for row in trecho.to_dict("records"):
+                empresas[row["cnpjBasico"]] = {
+                    "razaoSocial": valor(row.get("razaoSocial")),
+                    "capitalSocial": valor(row.get("capital")),
+                    "porteJuridico": valor(row.get("porte")),
+                    "naturezaJuridica": valor(row.get("natureza")),
+                }
+    return empresas
 
 
 def pontuar(escola: dict, candidato: dict) -> tuple[float, list[str]]:
     nome_escola = normalizar(escola.get("nome"))
     nomes = [normalizar(candidato.get("nomeFantasia")), normalizar(candidato.get("razaoSocial"))]
     similaridade = max([SequenceMatcher(None, nome_escola, n).ratio() for n in nomes if n] or [0])
-    score = similaridade * 70
+    score = similaridade * 55
     evidencias = [f"similaridade de nome {similaridade:.0%}"]
+    municipio_a = normalizar(escola.get("municipio"))
+    municipio_b = normalizar(candidato.get("municipioNome"))
+    if municipio_a and municipio_a == municipio_b:
+        score += 10
+        evidencias.append("município idêntico")
     cep_a = re.sub(r"\D", "", str(escola.get("cep") or ""))
     cep_b = re.sub(r"\D", "", str(candidato.get("cep") or ""))
     if cep_a and cep_a == cep_b:
@@ -100,8 +126,24 @@ def pontuar(escola: dict, candidato: dict) -> tuple[float, list[str]]:
     bairro_a = normalizar(escola.get("bairro"))
     bairro_b = normalizar(candidato.get("bairro"))
     if bairro_a and bairro_a == bairro_b:
-        score += 10
+        score += 8
         evidencias.append("bairro idêntico")
+    endereco_a = normalizar(escola.get("endereco"))
+    endereco_b = normalizar(" ".join(valor(candidato.get(k)) for k in ["tipoLogradouro", "logradouro", "numero"]))
+    sim_endereco = SequenceMatcher(None, endereco_a, endereco_b).ratio() if endereco_a and endereco_b else 0
+    if sim_endereco >= 0.75:
+        score += 12
+        evidencias.append(f"endereço semelhante {sim_endereco:.0%}")
+    telefone_a = re.sub(r"\D", "", str(escola.get("tel") or ""))[-8:]
+    telefones_b = [re.sub(r"\D", "", valor(candidato.get(campo)))[-8:] for campo in ["telefone1", "telefone2"]]
+    if len(telefone_a) == 8 and telefone_a in telefones_b:
+        score += 25
+        evidencias.append("telefone idêntico")
+    email_a = str(escola.get("email") or "").strip().lower()
+    email_b = valor(candidato.get("email")).strip().lower()
+    if email_a and email_a == email_b:
+        score += 25
+        evidencias.append("e-mail idêntico")
     return min(100, score), evidencias
 
 
@@ -109,21 +151,35 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pasta-receita", type=Path, required=True)
     parser.add_argument("--pasta-escolas", type=Path, default=Path("data/escolas"))
+    parser.add_argument("--arquivo-escolas", type=Path, help="JSON exportado pela Central de Enriquecimento do Nexo")
     parser.add_argument("--saida", type=Path, default=Path("data/cnpj_candidatos"))
     args = parser.parse_args()
 
-    escolas = carregar_escolas(args.pasta_escolas)
+    escolas = carregar_escolas(args.pasta_escolas, args.arquivo_escolas)
     ufs = {e.get("uf") for e in escolas if e.get("uf")}
     municipios = ler_municipios(args.pasta_receita)
     estabelecimentos = filtrar_estabelecimentos(args.pasta_receita, ufs)
-    razoes = carregar_razoes(args.pasta_receita, set(estabelecimentos.cnpjBasico.dropna()))
-    estabelecimentos["razaoSocial"] = estabelecimentos.cnpjBasico.map(razoes).fillna('')
+    empresas = carregar_empresas(args.pasta_receita, set(estabelecimentos.cnpjBasico.dropna()))
+    estabelecimentos["razaoSocial"] = estabelecimentos.cnpjBasico.map(lambda c: empresas.get(c, {}).get("razaoSocial", ""))
     estabelecimentos["municipioNome"] = estabelecimentos.municipioReceita.str.zfill(4).map(municipios).fillna('')
 
     saida_por_uf = defaultdict(dict)
     for escola in escolas:
         municipio = normalizar(escola.get("municipio"))
-        candidatos = estabelecimentos[(estabelecimentos.uf == escola.get("uf")) & (estabelecimentos.municipioNome == municipio)]
+        candidatos_uf = estabelecimentos[estabelecimentos.uf == escola.get("uf")]
+        candidatos = candidatos_uf[candidatos_uf.municipioNome == municipio] if municipio else candidatos_uf.iloc[0:0]
+        # Registros OSM nem sempre têm addr:city. CEP e telefone permitem
+        # recuperar um conjunto pequeno de candidatos sem comparar a escola
+        # contra todas as PJs educacionais do estado.
+        if candidatos.empty:
+            cep_escola = re.sub(r"\D", "", str(escola.get("cep") or ""))
+            tel_escola = re.sub(r"\D", "", str(escola.get("tel") or ""))[-8:]
+            if len(cep_escola) == 8:
+                candidatos = candidatos_uf[candidatos_uf.cep.fillna('').eq(cep_escola)]
+            elif len(tel_escola) == 8:
+                tel1 = candidatos_uf.telefone1.fillna('').str.replace(r"\D", "", regex=True).str[-8:]
+                tel2 = candidatos_uf.telefone2.fillna('').str.replace(r"\D", "", regex=True).str[-8:]
+                candidatos = candidatos_uf[tel1.eq(tel_escola) | tel2.eq(tel_escola)]
         encontrados = []
         for row in candidatos.to_dict("records"):
             score, evidencias = pontuar(escola, row)
@@ -135,9 +191,19 @@ def main() -> None:
                 "nomeFantasia": row.get("nomeFantasia") or "",
                 "razaoSocial": row.get("razaoSocial") or "",
                 "cnae": row.get("cnaePrincipal") or "",
+                "cnaesSecundarios": valor(row.get("cnaesSecundarios")),
                 "cep": row.get("cep") or "",
                 "bairro": row.get("bairro") or "",
                 "logradouro": " ".join(str(row.get(k) or "") for k in ["tipoLogradouro", "logradouro", "numero"]).strip(),
+                "telefone": " / ".join(filter(None, [
+                    f"({valor(row.get('ddd1'))}) {valor(row.get('telefone1'))}" if valor(row.get('telefone1')) else "",
+                    f"({valor(row.get('ddd2'))}) {valor(row.get('telefone2'))}" if valor(row.get('telefone2')) else "",
+                ])),
+                "email": valor(row.get("email")),
+                "dataInicioAtividade": valor(row.get("inicioAtividade")),
+                "capitalSocial": empresas.get(row["cnpjBasico"], {}).get("capitalSocial", ""),
+                "porteJuridico": empresas.get(row["cnpjBasico"], {}).get("porteJuridico", ""),
+                "naturezaJuridica": empresas.get(row["cnpjBasico"], {}).get("naturezaJuridica", ""),
                 "score": round(score),
                 "evidencias": evidencias,
                 "status": "candidato_revisao",

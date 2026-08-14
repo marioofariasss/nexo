@@ -157,6 +157,31 @@ enriquecimento de CNPJ):
   Receita. Ticket e faturamento são sempre identificados como estimativas; não há
   fonte pública nacional confiável que publique esses valores reais por escola.
 
+### Esteira operacional das descobertas
+
+1. A Central processa todas as escolas `fonte=osm` e separa fora de escopo,
+   vínculo INEP, revisão INEP, revisão CNPJ e pesquisa pendente.
+2. Código INEP exato informado pela fonte pode ser vinculado automaticamente.
+   Correspondência por similaridade fica para revisão.
+3. A exportação `nexo_fila_enriquecimento_*.json` é a ponte entre o IndexedDB
+   e o pipeline offline; isso inclui as descobertas feitas depois do deploy e
+   que não existem nos JSONs versionados.
+4. O pipeline da Receita devolve arquivos `{UF}.json`, importados pela Central
+   e armazenados localmente. Candidatos com nome ≥90%, endereço coincidente,
+   município/UF compatíveis e PJ ativa podem ser validados em lote; os demais
+   exigem confirmação individual.
+5. Depois do CNPJ, a consulta pública preenche razão social, situação, capital,
+   natureza, telefone, e-mail e QSA disponíveis. Presença digital vem do OSM,
+   site oficial, preenchimento do time ou busca opcional configurada — nunca é
+   inferida apenas pelo nome.
+
+`baixar_base_cnpj_receita.py` consulta o compartilhamento público WebDAV da
+Receita, descobre o snapshot mensal mais recente e baixa somente as 10 partes
+de Empresas, as 10 de Estabelecimentos e Municípios. O pipeline lê os ZIPs
+diretamente e considera CNAE educacional principal ou secundário. A evidência
+de correspondência combina nome fantasia/razão social, município, CEP, bairro,
+logradouro/número, telefone e e-mail.
+
 ## Qualidade geográfica
 
 `coordenadaValidaBrasil()` valida latitude/longitude contra o território esperado

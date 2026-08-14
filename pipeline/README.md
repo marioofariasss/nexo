@@ -28,14 +28,39 @@ candidatas privadas dos itens fora do escopo comercial.
 
 ## Gerar candidatos de CNPJ
 
-Baixe e extraia localmente o snapshot aberto da Receita Federal. Não publique
-o dump bruto no GitHub. Depois execute:
+Para esta rotina basta o pandas; não é preciso instalar o conjunto geográfico:
 
 ```bash
-.venv-dados/bin/python pipeline/pipeline_cnpj_escolas_descobertas.py \
-  --pasta-receita /caminho/para/csvs-extraidos \
+python3 -m venv .venv-cnpj
+.venv-cnpj/bin/pip install -r pipeline/requirements-cnpj.txt
+```
+
+Na Central de Enriquecimento, clique em **Exportar fila para o pipeline da
+Receita**. O baixador descobre o snapshot mensal mais recente no repositório
+oficial e baixa somente Empresas, Estabelecimentos e Municípios. Os ZIPs são
+lidos diretamente, sem extração:
+
+```bash
+.venv-cnpj/bin/python pipeline/baixar_base_cnpj_receita.py \
+  --snapshot latest \
+  --destino .cache/receita-cnpj
+```
+
+O comando informa o mês encontrado e o volume antes de baixar. Em seguida:
+
+```bash
+.venv-cnpj/bin/python pipeline/pipeline_cnpj_escolas_descobertas.py \
+  --pasta-receita .cache/receita-cnpj/AAAA-MM \
+  --arquivo-escolas /caminho/nexo_fila_enriquecimento_AAAA-MM-DD.json \
   --saida data/cnpj_candidatos
 ```
 
-O resultado contém no máximo três sugestões por escola. O Nexo não confirma
+O resultado contém no máximo três sugestões por escola, incluindo telefone,
+e-mail, capital e porte jurídico públicos quando disponíveis. Selecione os
+arquivos `{UF}.json` em **Importar resultados da Receita**. O Nexo não confirma
 automaticamente: um operador precisa escolher a correspondência na ficha.
+
+O filtro considera estabelecimentos ativos com CNAE principal **ou secundário**
+de educação básica (`8511`, `8512`, `8513`, `8520`). A pontuação compara nome
+fantasia e razão social, município, CEP, bairro, logradouro/número, telefone e
+e-mail. O dump fica em `.cache/` e nunca deve ser versionado.
