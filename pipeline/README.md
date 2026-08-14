@@ -92,6 +92,9 @@ mês e também pode ser iniciado manualmente na aba **Actions** do GitHub. Ele:
 4. publica somente `data/cnpj_candidatos/{UF}.json`;
 5. descarta a máquina e todo o dump bruto.
 
+O parâmetro manual **somente_validar** testa a fila, o workflow e os candidatos
+já publicados sem baixar o snapshot da Receita.
+
 Para substituir a fila usando uma exportação antiga ou completa, reduza-a com
 `pipeline/preparar_fila_cnpj.py`. A Central agora já exporta diretamente o
 formato compacto.

@@ -11,6 +11,11 @@ on:
         description: "Fila compacta dentro do repositório"
         required: true
         default: data/enriquecimento/fila_cnpj.json
+      somente_validar:
+        description: "Validar configuração e resultados atuais sem baixar a Receita"
+        type: boolean
+        required: true
+        default: false
   schedule:
     - cron: "23 5 5 * *"
 
@@ -45,12 +50,15 @@ jobs:
           python -c 'import json,os; d=json.load(open(os.environ["FILA"])); assert d.get("escolas"), "Fila vazia"; print(len(d["escolas"]), "escolas na fila")'
 
       - name: Instalar dependências
+        if: ${{ inputs.somente_validar != true }}
         run: pip install --disable-pip-version-check -r pipeline/requirements-cnpj.txt
 
       - name: Baixar snapshot oficial em disco temporário
+        if: ${{ inputs.somente_validar != true }}
         run: python pipeline/baixar_base_cnpj_receita.py --snapshot "$SNAPSHOT" --destino "$RUNNER_TEMP/receita-cnpj" --workers 6
 
       - name: Localizar o snapshot baixado
+        if: ${{ inputs.somente_validar != true }}
         shell: bash
         run: |
           RECEITA_DIR="$(find "$RUNNER_TEMP/receita-cnpj" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
@@ -59,6 +67,7 @@ jobs:
           echo "SNAPSHOT_REAL=$(basename "$RECEITA_DIR")" >> "$GITHUB_ENV"
 
       - name: Gerar e validar candidatos
+        if: ${{ inputs.somente_validar != true }}
         shell: bash
         run: |
           python pipeline/pipeline_cnpj_escolas_descobertas.py \
@@ -69,7 +78,12 @@ jobs:
           python pipeline/validar_candidatos_cnpj.py "$RUNNER_TEMP/cnpj-candidatos" | tee resultado-cnpj.txt
           cat resultado-cnpj.txt >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Validar resultados publicados sem download
+        if: ${{ inputs.somente_validar == true }}
+        run: python pipeline/validar_candidatos_cnpj.py data/cnpj_candidatos | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Publicar somente resultados compactos
+        if: ${{ inputs.somente_validar != true }}
         shell: bash
         run: |
           git pull --rebase origin main
