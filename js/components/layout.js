@@ -4,6 +4,7 @@ import { abrirPainelEscola } from './painelEscola.js';
 
 const ITENS_NAV = [
   { href: 'index.html', icone: '&#9737;', label: 'Dashboard', chave: 'dashboard' },
+  { href: 'pages/inteligencia.html', icone: '&#128200;', label: 'Inteligência', chave: 'inteligencia' },
   { href: 'pages/busca.html', icone: '&#128269;', label: 'Base de Escolas', chave: 'busca' },
   { href: 'pages/mercado.html', icone: '&#128506;', label: 'Mapear Mercado', chave: 'mercado' },
   { href: 'pages/enriquecimento.html', icone: '&#128295;', label: 'Enriquecimento', chave: 'enriquecimento' },
@@ -33,7 +34,7 @@ export function montarLayout({ paginaAtiva, titulo, prefixo = '' }) {
   shell.innerHTML = `
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
     <aside class="sidebar" id="sidebar">
-      <div class="brand">Nexo<span>Inteligência de mercado para escolas</span></div>
+      <div class="brand">Nexo<span>Inteligência do mercado educacional</span></div>
       <nav>${navHtml}</nav>
       <div class="nav-footer">Dados: Censo Escolar INEP<br>Uso local neste navegador</div>
     </aside>
@@ -43,7 +44,7 @@ export function montarLayout({ paginaAtiva, titulo, prefixo = '' }) {
         <h1>${titulo}</h1>
         <div class="global-search">
           <span class="icone-lupa">&#128269;</span>
-          <input type="text" id="busca-global-input" placeholder="Buscar escola, CNPJ, cidade, marcador...">
+          <input type="text" id="busca-global-input" placeholder="Buscar escola, CNPJ ou cidade...">
           <div class="global-search-resultados hidden" id="busca-global-resultados"></div>
         </div>
         <div class="actions">

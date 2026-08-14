@@ -1,8 +1,6 @@
 import { montarLayout } from '../components/layout.js';
 import { alternarTema } from '../utils/theme.js';
-import { getFiltrosSalvos, removerFiltroSalvo, getChaveApiIA, salvarChaveApiIA, getMeuNome, salvarMeuNome } from '../services/crmService.js';
-import { exportarBackupCompleto, importarBackupCompleto } from '../services/backupService.js';
-import { listarTags, criarTag, atualizarTag, excluirTag } from '../services/tagService.js';
+import { getFiltrosSalvos, removerFiltroSalvo } from '../services/crmService.js';
 import { getConfigBuscaSocial, salvarConfigBuscaSocial } from '../services/socialSearchService.js';
 
 montarLayout({ paginaAtiva: 'config', titulo: 'Configurações', prefixo: '../' });
@@ -11,42 +9,9 @@ const content = document.getElementById('content');
 function skeleton() {
   content.innerHTML = `
     <div class="card">
-      <h2>Meu nome</h2>
-      <p class="sub">Usado para registrar quem fez cada alteração no histórico de marcadores e interações.</p>
-      <div class="field-row">
-        <div><label>Nome</label><input type="text" id="f-meu-nome" placeholder="Como você quer aparecer no histórico"></div>
-      </div>
-      <button class="btn btn-primary" id="btn-salvar-nome">Salvar</button>
-      <span class="loading-bar" id="msg-nome"></span>
-    </div>
-
-    <div class="card">
       <h2>Aparência</h2>
       <p class="sub">Alterna entre tema claro e escuro (também disponível no topo de qualquer página).</p>
       <button class="btn" id="btn-tema-config">Alternar tema</button>
-    </div>
-
-    <div class="card">
-      <h2>Marcadores</h2>
-      <p class="sub">Catálogo de tags usadas para organizar a prospecção. Marque uma tag como "representa vendedor" para usá-la como responsável por uma escola.</p>
-      <div id="lista-tags"></div>
-      <h3 style="margin-top:16px;">Nova tag</h3>
-      <div class="field-row">
-        <div><label>Nome</label><input type="text" id="f-nova-tag-nome" placeholder="ex: João, Prioridade Alta..."></div>
-        <div><label>Cor</label><input type="color" id="f-nova-tag-cor" value="#378ADD"></div>
-      </div>
-      <div class="field-row">
-        <div>
-          <label>Tipo</label>
-          <select id="f-nova-tag-tipo">
-            <option value="status">Status</option>
-            <option value="vendedor">Vendedor (responsável)</option>
-            <option value="outro">Outro</option>
-          </select>
-        </div>
-        <div><label>Ordem de exibição</label><input type="number" id="f-nova-tag-ordem" value="50"></div>
-      </div>
-      <button class="btn btn-primary" id="btn-add-tag">Criar tag</button>
     </div>
 
     <div class="card">
@@ -71,51 +36,11 @@ function skeleton() {
     </div>
 
     <div class="card">
-      <h2>Recursos de IA (opcional)</h2>
-      <p class="sub">
-        Cole aqui sua chave de API da <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>
-        para habilitar resumo automático, sugestão de abordagem e outros recursos de IA na ficha da escola.
-        <strong>Atenção:</strong> como este app não tem backend, a chave fica salva neste navegador e é visível a quem tiver
-        acesso a ele — use uma chave com limite de gasto configurado, dedicada a este uso.
-      </p>
-      <div class="field-row">
-        <div><label>Chave de API</label><input type="password" id="f-chave-ia" placeholder="sk-ant-..."></div>
-      </div>
-      <button class="btn btn-primary" id="btn-salvar-chave">Salvar chave</button>
-      <button class="btn" id="btn-remover-chave">Remover chave</button>
-      <span class="loading-bar" id="msg-chave"></span>
-    </div>
-
-    <div class="card">
-      <h2>Backup e restauração</h2>
-      <p class="sub">
-        Exporta os marcadores, o catálogo de tags, o histórico e as interações para um arquivo JSON — útil para não perder
-        nada ao trocar de computador, ou para repassar sua carteira para outro vendedor/gestor manualmente (lembrete: este
-        app não sincroniza automaticamente entre navegadores, e documentos anexados não entram no backup).
-      </p>
-      <button class="btn btn-primary" id="btn-exportar-backup">Exportar backup completo</button>
-      <div style="margin-top:10px;">
-        <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px;">Importar backup (mescla com os dados atuais)</label>
-        <input type="file" id="f-importar-backup" accept="application/json">
-      </div>
-      <span class="loading-bar" id="msg-backup"></span>
-    </div>
-
-    <div class="card">
       <h2>Filtros salvos</h2>
       <p class="sub">Filtros que você salvou na Consulta de escolas. Clique para reaplicar.</p>
       <div id="lista-filtros-salvos"></div>
     </div>
 
-    <div class="card">
-      <h2>Permissões</h2>
-      <p class="sub">
-        Este app roda 100% no seu navegador, sem login nem backend — por isso não há perfis de Administrador/Gestor/Vendedor
-        com permissões diferentes: qualquer pessoa que abrir este navegador tem acesso completo aos dados salvos nele. Se
-        isso se tornar uma limitação real para o time, esse é o ponto onde vale migrar a camada comercial para um backend
-        como o Supabase (ver ARQUITETURA.md).
-      </p>
-    </div>
   `;
 }
 
@@ -195,54 +120,6 @@ async function init() {
     });
     document.getElementById('msg-busca-social-config').textContent = 'Salvo.';
     setTimeout(() => { const m = document.getElementById('msg-busca-social-config'); if (m) m.textContent = ''; }, 2000);
-  });
-
-  document.getElementById('f-meu-nome').value = await getMeuNome();
-  document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
-    await salvarMeuNome(document.getElementById('f-meu-nome').value.trim());
-    document.getElementById('msg-nome').textContent = 'Salvo.';
-    setTimeout(() => { const m = document.getElementById('msg-nome'); if (m) m.textContent = ''; }, 1500);
-  });
-
-  await renderTags();
-  document.getElementById('btn-add-tag').addEventListener('click', async () => {
-    const nome = document.getElementById('f-nova-tag-nome').value.trim();
-    if (!nome) return;
-    await criarTag({
-      nome,
-      cor: document.getElementById('f-nova-tag-cor').value,
-      tipo: document.getElementById('f-nova-tag-tipo').value,
-      ordem: Number(document.getElementById('f-nova-tag-ordem').value) || 50,
-    });
-    document.getElementById('f-nova-tag-nome').value = '';
-    renderTags();
-  });
-
-  const chaveAtual = await getChaveApiIA();
-  if (chaveAtual) document.getElementById('f-chave-ia').value = chaveAtual;
-
-  document.getElementById('btn-salvar-chave').addEventListener('click', async () => {
-    await salvarChaveApiIA(document.getElementById('f-chave-ia').value.trim());
-    document.getElementById('msg-chave').textContent = 'Chave salva.';
-    setTimeout(() => { const m = document.getElementById('msg-chave'); if (m) m.textContent = ''; }, 2000);
-  });
-  document.getElementById('btn-remover-chave').addEventListener('click', async () => {
-    await salvarChaveApiIA('');
-    document.getElementById('f-chave-ia').value = '';
-    document.getElementById('msg-chave').textContent = 'Chave removida.';
-  });
-
-  document.getElementById('btn-exportar-backup').addEventListener('click', exportarBackupCompleto);
-  document.getElementById('f-importar-backup').addEventListener('change', async (e) => {
-    const arquivo = e.target.files[0];
-    if (!arquivo) return;
-    const msg = document.getElementById('msg-backup');
-    try {
-      const resultado = await importarBackupCompleto(arquivo);
-      msg.textContent = `Importado: ${resultado.crm} escolas com marcadores, ${resultado.tags} tags, ${resultado.interacoes} interações.`;
-    } catch (err) {
-      msg.textContent = `Erro: ${err.message}`;
-    }
   });
 
   await renderFiltrosSalvos();

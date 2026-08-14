@@ -51,15 +51,22 @@ serviço é usado tanto por `index.html` (na raiz) quanto por páginas dentro de
 na raiz mas quebra dentro de `/pages/`. Qualquer novo serviço que busque algo
 em `/data` deve seguir o mesmo padrão.
 
-### 2. Camada comercial (`crm`, `interacoes`) — editável pelo vendedor
+### 2. Camada local legada (`crm`, `interacoes`)
 
-- `crm`: um registro por escola com o estado comercial atual (status no
-  funil, vendedor responsável, etapa do kanban, prioridade). Criado/editado a
-  partir da Fase 3 em diante.
-- `interacoes`: várias linhas por escola (ligações, e-mails, reuniões,
-  propostas) — o histórico de CRM da Fase 4.
+- Essas stores pertencem a versões anteriores e não aparecem mais na
+  experiência principal. Permanecem no schema para que uma atualização não
+  apague silenciosamente dados locais existentes.
 
 Essas duas stores **nunca são apagadas** por uma reimportação da base fria.
+
+### 3. Camada analítica longitudinal
+
+`data/inteligencia/resumo.json` contém séries Brasil/UF e diagnósticos
+municipais. `data/inteligencia/escolas/{UF}.json` contém séries 2019–2025 por
+escola e município. Tudo é gerado por
+`pipeline/pipeline_inep_longitudinal.py` a partir dos ZIPs oficiais do Inep.
+O pipeline harmoniza a tabela única de 2019–2024 com as tabelas separadas de
+escola, matrícula, turma e docente publicadas em 2025.
 
 ### Schema do IndexedDB (`js/services/db.js`)
 

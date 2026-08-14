@@ -1,14 +1,15 @@
-# Nexo — inteligência de mercado para escolas
+# Nexo — inteligência do mercado educacional
 
-Aplicação 100% front-end (HTML + CSS + JavaScript ES6, sem build step) para o
-time comercial da kedu (agência de marketing educacional) pesquisar, analisar
-e priorizar escolas privadas em todo o Brasil, usando dados enriquecidos do
-Censo Escolar INEP (porte, faturamento potencial, evasão, capacidade ociosa)
-cruzados com um sistema de **marcadores (tags)** para organizar a
-prospecção, rodando localmente no navegador (IndexedDB). Não é uma
-plataforma de CRM com funil/pipeline — é uma ferramenta de pesquisa e
-análise ativa de mercado, com marcadores simples para acompanhar quem já foi
-prospectado.
+Aplicação 100% front-end (HTML + CSS + JavaScript ES6, sem build step) para
+estudar escolas e mercados educacionais no Brasil. Cruza a série 2019–2025 dos
+microdados do Censo Escolar Inep com demografia, renda, território e natalidade
+para analisar evolução, participação privada, concentração, pressão de oferta e
+risco de saturação. Os microdados brutos são processados offline; o navegador
+recebe apenas agregados compactos e séries por escola/UF.
+
+Marcadores e histórico comercial foram retirados da experiência do produto. As
+stores antigas do IndexedDB são preservadas somente para que a atualização não
+apague dados locais de instalações anteriores.
 
 **Nota de nome**: o produto se chamava "kedu Radar" até esta rodada —
 renomeado pra **Nexo** porque nomes descritivos como esse (ou "Radar

@@ -46,6 +46,12 @@ function skeleton() {
 
     <div class="kpis" id="kpis"></div>
 
+    <div class="card" style="border-left:4px solid var(--accent);">
+      <h2><i class="fa-solid fa-chart-line"></i> Inteligência longitudinal 2019–2025</h2>
+      <p class="sub">Evolução de matrículas, oferta, participação privada, concentração, pressão de mercado, risco de saturação, demografia e poder de compra.</p>
+      <a class="btn btn-primary" href="pages/inteligencia.html">Abrir Inteligência Educacional</a>
+    </div>
+
 
 
     <div class="dash-section-header"><i class="fa-solid fa-map-location-dot"></i> Onde estão as escolas</div>
@@ -68,7 +74,7 @@ function skeleton() {
       </div>
     </div>
 
-    <div class="dash-section-header"><i class="fa-solid fa-star"></i> Perfil das escolas e dos responsáveis</div>
+    <div class="dash-section-header"><i class="fa-solid fa-school"></i> Estrutura das escolas privadas</div>
     <div class="grid2">
       <div class="card">
         <h2>Distribuição por porte</h2>
@@ -77,24 +83,24 @@ function skeleton() {
         </div>
       </div>
       <div class="card">
-        <h2>Top 10 por faturamento potencial</h2>
-        <p class="sub">Maior faturamento potencial estimado no Brasil · clique numa barra pra abrir a ficha</p>
+        <h2>Top 10 por mercado estimado</h2>
+        <p class="sub">Estimativa proporcional a matrículas e ticket regional · clique numa barra pra abrir a ficha</p>
         <div style="position:relative;height:240px;">
           <canvas id="chart-icp" role="img" aria-label="Grafico de barras das 10 escolas com maior faturamento potencial no Brasil"></canvas>
         </div>
       </div>
     </div>
 
-    <div class="dash-section-header"><i class="fa-solid fa-bullseye"></i> Prioridades de prospecção</div>
+    <div class="dash-section-header"><i class="fa-solid fa-ranking-star"></i> Maiores escolas por mercado estimado</div>
     <div class="card">
-      <h2>Top oportunidades (maior faturamento potencial)</h2>
-      <p class="sub">300 escolas com maior faturamento potencial estimado · clique numa linha pra abrir a ficha, ou num cabeçalho pra ordenar</p>
+      <h2>Maiores mercados escolares estimados</h2>
+      <p class="sub">Ranking exploratório por matrículas × mensalidade regional estimada · clique numa linha pra abrir a ficha</p>
       <div class="table-scroll">
         <table class="data-table" id="tabela-top">
           <thead><tr>
             <th data-key="NO_ENTIDADE">Escola</th><th data-key="SG_UF">UF</th><th data-key="NO_MUNICIPIO">Município</th>
             <th data-key="PORTE">Porte</th><th data-key="QT_MAT_BAS">Matrículas</th>
-            <th data-key="FATURAMENTO_POTENCIAL_ANUAL">Faturamento potencial/ano</th><th data-key="NU_DDD">DDD</th><th data-key="NU_TELEFONE">Telefone</th>
+            <th data-key="MENSALIDADE_ESTIMADA">Ticket estimado</th><th data-key="FATURAMENTO_POTENCIAL_ANUAL">Mercado estimado/ano</th>
           </tr></thead>
           <tbody id="tbody-top"></tbody>
         </table>
@@ -123,14 +129,14 @@ function skeleton() {
 
     <div class="card">
       <h2><i class="fa-solid fa-arrow-up-right-dots" style="color:var(--icp-alta);"></i> Maiores ganhos de matrícula</h2>
-      <p class="sub">Escolas ativas com maior crescimento percentual 2024→2025 — oportunidades de upsell · clique numa linha pra abrir a ficha</p>
+      <p class="sub">Escolas ativas com maior crescimento percentual 2024→2025 · clique numa linha pra abrir a ficha</p>
       <div class="table-scroll">
         <table class="data-table" id="tabela-crescimento">
           <thead><tr>
             <th data-key="NO_ENTIDADE">Escola</th><th data-key="SG_UF">UF</th><th data-key="NO_MUNICIPIO">Município</th>
             <th data-key="QT_MAT_BAS_2024">Matrículas 2024</th><th data-key="QT_MAT_BAS_2025">Matrículas 2025</th>
             <th data-key="VARIACAO_MATRICULAS_PCT">Variação %</th><th data-key="MUDANCA_PORTE">Mudança de porte</th>
-            <th data-key="MENSALIDADE_ESTIMADA">Ticket médio</th><th data-key="NU_DDD">DDD</th><th data-key="NU_TELEFONE">Telefone</th>
+            <th data-key="MENSALIDADE_ESTIMADA">Ticket estimado</th>
           </tr></thead>
           <tbody id="tbody-crescimento"></tbody>
         </table>
@@ -146,7 +152,6 @@ function skeleton() {
             <th data-key="NO_ENTIDADE">Escola</th><th data-key="SG_UF">UF</th><th data-key="NO_MUNICIPIO">Município</th>
             <th data-key="QT_MAT_BAS_2025">Matrículas 2025</th><th data-key="CAPACIDADE_OCIOSA_ESTIMADA_ALUNOS">Capacidade ociosa (alunos)</th>
             <th data-key="SINAL_MATRICULAS">Sinal de matrículas</th><th data-key="MENSALIDADE_ESTIMADA">Ticket médio</th>
-            <th data-key="NU_DDD">DDD</th><th data-key="NU_TELEFONE">Telefone</th>
           </tr></thead>
           <tbody id="tbody-ocioso"></tbody>
         </table>
@@ -163,7 +168,7 @@ function skeleton() {
     </div>
 
     <div class="footer-note">
-      <strong>Sobre as premissas:</strong> o faturamento potencial anual é uma estimativa (mensalidade média por porte × multiplicador regional × matrículas × 12 meses), ainda não calibrada com benchmarks reais da Kedu. A capacidade ociosa compara a média de alunos/turma da escola com a mediana de escolas do mesmo porte/UF — não é a capacidade física real declarada. O grupo "sumiu em 2025" pode incluir tanto encerramentos reais quanto escolas que não atualizaram o Censo. Base: Censo Escolar INEP 2024 e 2025, escolas privadas.
+      <strong>Sobre as premissas:</strong> o mercado anual é uma estimativa (mensalidade média por porte × multiplicador regional × matrículas × 12 meses). A capacidade ociosa compara alunos/turma com a mediana de escolas do mesmo porte/UF — não é capacidade física declarada. O grupo "sumiu em 2025" pode incluir encerramentos ou ausência de atualização no Censo. Base: Censo Escolar INEP.
     </div>
   `;
 }
@@ -415,8 +420,7 @@ function renderTabelaTop(f) {
   rows.sort((a, b) => b.FATURAMENTO_POTENCIAL_ANUAL - a.FATURAMENTO_POTENCIAL_ANUAL);
   document.getElementById('tbody-top').innerHTML = rows.slice(0, 300).map((r) => `
     <tr data-id="${r.id}" data-uf="${r.SG_UF}" style="cursor:pointer;"><td>${r.NO_ENTIDADE}</td><td>${r.SG_UF}</td><td>${r.NO_MUNICIPIO}</td><td>${labelPorte(r.PORTE)}</td>
-    <td>${fmtInt(r.QT_MAT_BAS)}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td><td>${fmtMoedaCompacta(r.FATURAMENTO_POTENCIAL_ANUAL)}</td>
-    <td>${r.NU_DDD ? Math.round(r.NU_DDD) : '-'}</td><td>${r.NU_TELEFONE ? Math.round(r.NU_TELEFONE) : '-'}</td></tr>`).join('');
+    <td>${fmtInt(r.QT_MAT_BAS)}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td><td>${fmtMoedaCompacta(r.FATURAMENTO_POTENCIAL_ANUAL)}</td></tr>`).join('');
   ligarCliquesTabela('tbody-top');
 }
 
@@ -438,8 +442,7 @@ function renderTabelaCrescimento(f) {
     <tr data-id="${r.id}" data-uf="${r.SG_UF}" style="cursor:pointer;"><td>${r.NO_ENTIDADE}</td><td>${r.SG_UF}</td><td>${r.NO_MUNICIPIO}</td>
     <td>${fmtInt(r.QT_MAT_BAS_2024)}</td><td>${fmtInt(r.QT_MAT_BAS_2025)}</td>
     <td>${r.VARIACAO_MATRICULAS_PCT != null ? r.VARIACAO_MATRICULAS_PCT.toFixed(1) + '%' : '-'}</td>
-    <td>${r.MUDANCA_PORTE || '-'}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td>
-    <td>${r.NU_DDD ? Math.round(r.NU_DDD) : '-'}</td><td>${r.NU_TELEFONE ? Math.round(r.NU_TELEFONE) : '-'}</td></tr>`).join('');
+    <td>${r.MUDANCA_PORTE || '-'}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td></tr>`).join('');
   ligarCliquesTabela('tbody-crescimento');
 }
 
@@ -450,8 +453,7 @@ function renderTabelaOcioso(f) {
   document.getElementById('tbody-ocioso').innerHTML = rows.slice(0, 300).map((r) => `
     <tr data-id="${r.id}" data-uf="${r.SG_UF}" style="cursor:pointer;"><td>${r.NO_ENTIDADE}</td><td>${r.SG_UF}</td><td>${r.NO_MUNICIPIO}</td>
     <td>${fmtInt(r.QT_MAT_BAS_2025)}</td><td>${fmtInt(r.CAPACIDADE_OCIOSA_ESTIMADA_ALUNOS)}</td>
-    <td>${r.SINAL_MATRICULAS}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td>
-    <td>${r.NU_DDD ? Math.round(r.NU_DDD) : '-'}</td><td>${r.NU_TELEFONE ? Math.round(r.NU_TELEFONE) : '-'}</td></tr>`).join('');
+    <td>${r.SINAL_MATRICULAS}</td><td>${r.MENSALIDADE_ESTIMADA != null ? fmtMoedaCompacta(r.MENSALIDADE_ESTIMADA) : '-'}</td></tr>`).join('');
   ligarCliquesTabela('tbody-ocioso');
 }
 

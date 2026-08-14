@@ -5,7 +5,6 @@ import { statusBaseCarregada, importarTodasUFs, importarUF, carregarIndiceUFs } 
 import { abrirPainelEscola } from '../components/painelEscola.js';
 import { exportarCsv } from '../utils/csv.js';
 import { getFiltrosSalvos, salvarFiltroSalvo } from '../services/crmService.js';
-import { listarTags } from '../services/tagService.js';
 
 montarLayout({ paginaAtiva: 'busca', titulo: 'Base de Escolas', prefixo: '../' });
 const content = document.getElementById('content');
@@ -19,7 +18,6 @@ const LABEL_PORTE = {
 let resultadoCompleto = [];
 let linhasExibidas = 0;
 let indiceUFs = [];
-let catalogoTags = [];
 
 function skeleton() {
   content.innerHTML = `
@@ -41,12 +39,6 @@ function skeleton() {
           <option>Ganho de alunos (crescimento >10%)</option>
         </select>
       </div>
-      <div>
-        <label>Marcadores</label>
-        <select id="f-tags" multiple style="min-width:200px;"></select>
-      </div>
-      <div><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="f-sem-tag"> Sem marcador</label></div>
-      <div><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="f-com-tag"> Com marcador</label></div>
       <div><label>Ordenar por</label>
         <select id="f-ordenar">
           <option value="mat25">Matrículas</option>
@@ -73,15 +65,6 @@ function skeleton() {
   `;
 }
 
-function chipsMarcadores(tagIds) {
-  if (!tagIds || !tagIds.length) return '<span style="color:var(--text-muted);font-size:11px;">—</span>';
-  return tagIds.map((tid) => {
-    const tag = catalogoTags.find((t) => t.id === tid);
-    if (!tag) return '';
-    return `<span class="tag-chip" style="background:${tag.cor};">${tag.nome}</span>`;
-  }).join(' ');
-}
-
 function renderTabela() {
   const area = document.getElementById('area-tabela');
   linhasExibidas = Math.min(PAGE_SIZE, resultadoCompleto.length);
@@ -97,7 +80,7 @@ function montarTabelaHtml(linhas) {
     <table class="data-table">
       <thead><tr>
         <th>Escola</th><th>UF</th><th>Município</th><th>Porte</th><th>Matrículas</th>
-        <th>Ticket médio</th><th>Faturamento potencial</th><th>Marcadores</th><th>Telefone</th>
+        <th>Ticket médio</th><th>Faturamento potencial</th><th>Telefone</th>
       </tr></thead>
       <tbody>
         ${linhas.map((r) => `
@@ -106,7 +89,6 @@ function montarTabelaHtml(linhas) {
             <td>${fmtInt(r.mat25)}</td>
             <td>${r.mensalidade != null ? fmtMoedaCompacta(r.mensalidade) : '-'}</td>
             <td>${fmtMoedaCompacta(r.fatPotencial)}</td>
-            <td>${chipsMarcadores(r.tagIds)}</td>
             <td>${r.ddd ? `(${r.ddd}) ` : ''}${r.tel || '-'}</td>
           </tr>`).join('')}
       </tbody>
@@ -122,16 +104,12 @@ function ligarCliquesLinha() {
 }
 
 function lerFiltros() {
-  const selecionadas = Array.from(document.getElementById('f-tags').selectedOptions).map((o) => Number(o.value));
   return {
     uf: document.getElementById('f-uf').value,
     municipio: document.getElementById('f-municipio').value.trim(),
     nome: document.getElementById('f-nome').value.trim(),
     porte: document.getElementById('f-porte').value,
     sinalMat: document.getElementById('f-sinal').value,
-    tagIds: selecionadas,
-    semTag: document.getElementById('f-sem-tag').checked,
-    comTag: document.getElementById('f-com-tag').checked,
     ordenarPor: document.getElementById('f-ordenar').value,
   };
 }
@@ -143,16 +121,9 @@ function limparCampo(campo) {
     nome: () => { document.getElementById('f-nome').value = ''; },
     porte: () => { document.getElementById('f-porte').value = ''; },
     sinalMat: () => { document.getElementById('f-sinal').value = ''; },
-    semTag: () => { document.getElementById('f-sem-tag').checked = false; },
-    comTag: () => { document.getElementById('f-com-tag').checked = false; },
     ordenarPor: () => { document.getElementById('f-ordenar').value = 'mat25'; },
   };
   if (acoes[campo]) acoes[campo]();
-}
-
-function removerTagFiltro(tagId) {
-  const select = document.getElementById('f-tags');
-  Array.from(select.options).forEach((opt) => { if (Number(opt.value) === tagId) opt.selected = false; });
 }
 
 function renderFiltrosAtivos(filtros) {
@@ -164,12 +135,6 @@ function renderFiltrosAtivos(filtros) {
   if (filtros.nome) chips.push({ label: `Nome: ${filtros.nome}`, onRemove: () => limparCampo('nome') });
   if (filtros.porte) chips.push({ label: LABEL_PORTE[filtros.porte] || filtros.porte, onRemove: () => limparCampo('porte') });
   if (filtros.sinalMat) chips.push({ label: filtros.sinalMat, onRemove: () => limparCampo('sinalMat') });
-  if (filtros.semTag) chips.push({ label: 'Sem marcador', onRemove: () => limparCampo('semTag') });
-  if (filtros.comTag) chips.push({ label: 'Com marcador', onRemove: () => limparCampo('comTag') });
-  filtros.tagIds.forEach((tid) => {
-    const tag = catalogoTags.find((t) => t.id === tid);
-    if (tag) chips.push({ label: tag.nome, onRemove: () => removerTagFiltro(tid) });
-  });
 
   if (!chips.length) { container.innerHTML = ''; return; }
 
@@ -181,8 +146,7 @@ function renderFiltrosAtivos(filtros) {
     el.addEventListener('click', () => { chips[i].onRemove(); executarBusca(); });
   });
   document.getElementById('limpar-todos').addEventListener('click', () => {
-    ['uf', 'municipio', 'nome', 'porte', 'sinalMat', 'semTag', 'comTag'].forEach(limparCampo);
-    document.getElementById('f-tags').selectedOptions && Array.from(document.getElementById('f-tags').options).forEach((o) => { o.selected = false; });
+    ['uf', 'municipio', 'nome', 'porte', 'sinalMat'].forEach(limparCampo);
     executarBusca();
   });
 }
@@ -237,10 +201,10 @@ function ligarBotoes() {
     document.getElementById('btn-mais').classList.toggle('hidden', linhasExibidas >= resultadoCompleto.length);
   });
   document.getElementById('btn-exportar').addEventListener('click', () => {
-    exportarCsv(resultadoCompleto.map((r) => ({ ...r, marcadores: (r.tagIds || []).map((tid) => (catalogoTags.find((t) => t.id === tid) || {}).nome).filter(Boolean).join(', ') })), [
+    exportarCsv(resultadoCompleto, [
       { chave: 'nome', titulo: 'Escola' }, { chave: 'uf', titulo: 'UF' }, { chave: 'municipio', titulo: 'Município' },
       { chave: 'porte', titulo: 'Porte' }, { chave: 'mat25', titulo: 'Matrículas 2025' }, { chave: 'mensalidade', titulo: 'Ticket médio' },
-      { chave: 'fatPotencial', titulo: 'Faturamento potencial' }, { chave: 'marcadores', titulo: 'Marcadores' },
+      { chave: 'fatPotencial', titulo: 'Faturamento potencial' },
       { chave: 'ddd', titulo: 'DDD' }, { chave: 'tel', titulo: 'Telefone' },
       { chave: 'cnpj', titulo: 'CNPJ' }, { chave: 'endereco', titulo: 'Endereço' }, { chave: 'cep', titulo: 'CEP' },
     ], 'escolas_filtradas');
@@ -259,17 +223,6 @@ async function popularUFs() {
   [...indiceUFs].sort((a, b) => a.uf.localeCompare(b.uf)).forEach((item) => {
     const opt = document.createElement('option');
     opt.value = item.uf; opt.textContent = `${item.uf} (${item.n})`;
-    select.appendChild(opt);
-  });
-}
-
-async function popularTags() {
-  catalogoTags = await listarTags();
-  const select = document.getElementById('f-tags');
-  select.size = Math.min(8, Math.max(4, catalogoTags.length));
-  catalogoTags.forEach((tag) => {
-    const opt = document.createElement('option');
-    opt.value = tag.id; opt.textContent = tag.nome;
     select.appendChild(opt);
   });
 }
@@ -298,9 +251,6 @@ async function aplicarFiltrosDaUrl() {
     porte: params.get('porte') || '',
     sinalMat: params.get('sinalMat') || '',
     ordenarPor: params.get('ordenarPor') || '',
-    semTag: params.get('semTag') === '1',
-    comTag: params.get('comTag') === '1',
-    tagIds: (params.get('tagIds') || '').split(',').filter(Boolean).map(Number),
   });
 }
 
@@ -311,19 +261,11 @@ function aplicarObjetoFiltro(f) {
   if (f.porte) document.getElementById('f-porte').value = f.porte;
   if (f.sinalMat) document.getElementById('f-sinal').value = f.sinalMat;
   if (f.ordenarPor) document.getElementById('f-ordenar').value = f.ordenarPor;
-  if (f.semTag) document.getElementById('f-sem-tag').checked = true;
-  if (f.comTag) document.getElementById('f-com-tag').checked = true;
-  if (f.tagIds && f.tagIds.length) {
-    Array.from(document.getElementById('f-tags').options).forEach((opt) => {
-      if (f.tagIds.includes(Number(opt.value))) opt.selected = true;
-    });
-  }
 }
 
 async function init() {
   skeleton();
   await popularUFs();
-  await popularTags();
   await aplicarFiltrosDaUrl();
   ligarBotoes();
   await executarBusca();

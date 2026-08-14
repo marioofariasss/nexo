@@ -1,11 +1,8 @@
 import { getEscolaById, buscarConcorrentesNaRegiao, calcularPosicaoNaRegiao, buscarCorrespondenciasInep } from '../services/escolaService.js';
 import {
-  getCrm, salvarObservacoes, getMeuNome,
-  adicionarTagNaEscola, removerTagDaEscola, listarHistoricoTags,
-  listarInteracoes, adicionarInteracao,
+  getCrm, salvarObservacoes,
   listarDocumentos, adicionarDocumento, removerDocumento,
 } from '../services/crmService.js';
-import { listarTags } from '../services/tagService.js';
 import { buscarDadosCnpj, getEnriquecimentoCache } from '../services/enriquecimentoService.js';
 import { fmtInt, fmtMoedaCompacta, labelPorte } from '../utils/formatters.js';
 import { chaveConfigurada, gerarComIA, TIPOS_ANALISE_IA } from '../services/aiService.js';
@@ -15,6 +12,7 @@ import { calcularCompletude, corNivel } from '../services/dataQualityService.js'
 import { buscarCandidatosCnpj } from '../services/cnpjCandidateService.js';
 import { put } from '../services/db.js';
 import { coordenadaValidaBrasil } from '../utils/geo.js';
+import { buscarSerieEscola, buscarDiagnosticoMunicipio } from '../services/inteligenciaService.js';
 
 // Estrutura em 4 blocos, sem ICP (removido de propósito — o ICP media o
 // perfil do responsável de uma escola específica, não é útil pra decidir
@@ -25,13 +23,10 @@ const ABAS = [
   { chave: 'institucional', label: 'Institucional' },
   { chave: 'escola', label: 'Escola' },
   { chave: 'inteligencia', label: 'Inteligência' },
-  { chave: 'historico', label: 'Histórico' },
-  { chave: 'marcadores', label: 'Marcadores' },
+  { chave: 'evolucao', label: 'Evolução 2019–2025' },
   { chave: 'observacoes', label: 'Observações' },
   { chave: 'documentos', label: 'Documentos' },
 ];
-
-const TIPO_INTERACAO = ['Ligação', 'E-mail', 'WhatsApp', 'Reunião', 'Visita', 'Proposta', 'Outro'];
 
 let estado = null; // guarda escola/crm/tags/interacoes/etc. carregados para a escola aberta no momento
 
@@ -44,9 +39,6 @@ export async function abrirPainelEscola(escolaId, { onAtualizar } = {}) {
   estado = {
     escola,
     crm: await getCrm(escolaId),
-    tags: await listarTags(),
-    historicoTags: await listarHistoricoTags(escolaId),
-    interacoes: await listarInteracoes(escolaId),
     documentos: await listarDocumentos(escolaId),
     enriquecimento: await getEnriquecimentoCache(escola.cnpj),
     candidatosCnpj: await buscarCandidatosCnpj(escola),
@@ -83,8 +75,7 @@ export async function abrirPainelEscola(escolaId, { onAtualizar } = {}) {
   renderInstitucional();
   renderEscola();
   renderInteligencia();
-  renderHistorico();
-  renderMarcadores();
+  renderEvolucao();
   renderObservacoes();
   renderDocumentos();
 
@@ -121,8 +112,7 @@ function notificarAtualizacao() {
 // Badges (topo, visível em todas as abas)
 // =====================================================================
 function renderBadges() {
-  const { escola, crm, tags } = estado;
-  const tagsDaEscola = tags.filter((t) => crm.tags.includes(t.id));
+  const { escola } = estado;
   const completude = calcularCompletude(escola);
   document.getElementById('drawer-badges').innerHTML = `
     <span class="badge" style="border-color:${corNivel(completude.nivel)};color:${corNivel(completude.nivel)};">Dados: ${completude.nivel} (${completude.percentual}%)</span>
@@ -130,7 +120,6 @@ function renderBadges() {
     ${escola.mat25 != null ? `<span class="badge">${fmtInt(escola.mat25)} matrículas</span>` : ''}
     ${escola.fatPotencial != null ? `<span class="badge">${fmtMoedaCompacta(escola.fatPotencial)}/ano potencial</span>` : ''}
     ${escola.sinalMat ? `<span class="badge">${escola.sinalMat}</span>` : ''}
-    ${tagsDaEscola.map((t) => `<span class="tag-chip" style="background:${t.cor}">${t.nome}</span>`).join('')}
   `;
 }
 
@@ -236,7 +225,7 @@ function renderContato() {
     </div>
     <div class="drawer-section">
       <h3>Editar links</h3>
-      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">Site e Instagram — os canais que realmente importam pra prospecção. Cole os links que encontrar ou confirme a sugestão automática acima.</p>
+      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">Site e Instagram ajudam a validar a identidade e a presença pública da instituição.</p>
       ${CAMPOS_MARKETING.map((c) => `
         <div style="margin-bottom:8px;">
           <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:3px;"><i class="${c.icone}"></i> ${c.label}</label>
@@ -326,21 +315,6 @@ function renderInstitucional() {
       <span class="loading-bar" id="msg-cnpj"></span>
     </div>
 
-    <div class="drawer-section">
-      <h3>Contato direto (preenchido pelo time)</h3>
-      <p style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;">
-        Registre aqui o WhatsApp do diretor, mantenedor ou dono assim que conseguir por um contato legítimo —
-        não pesquisamos automaticamente números pessoais de pessoas identificadas.
-      </p>
-      <div class="field-row">
-        <div><label>Nome do responsável</label><input type="text" id="f-nome-responsavel" value="${crm.nomeResponsavel || ''}" placeholder="Nome de quem decide"></div>
-        <div><label>WhatsApp do responsável</label><input type="text" id="f-whatsapp-responsavel" value="${crm.whatsappResponsavel || ''}" placeholder="(85) 99999-9999"></div>
-      </div>
-      <button class="btn btn-primary" id="btn-salvar-responsavel">Salvar</button>
-      ${crm.whatsappResponsavel ? `<a class="btn" href="https://wa.me/55${crm.whatsappResponsavel.replace(/\D/g, '')}" target="_blank" rel="noopener" style="margin-left:6px;"><i class="fa-brands fa-whatsapp"></i> Abrir WhatsApp</a>` : ''}
-      <span class="loading-bar" id="msg-responsavel"></span>
-    </div>
-
     ${!e
       ? '<div class="drawer-section"><p style="font-size:12.5px;color:var(--text-muted);">Busque os dados institucionais acima pra carregar o quadro de sócios (fonte pública).</p></div>'
       : (!e.socios || !e.socios.length)
@@ -399,14 +373,6 @@ function renderInstitucional() {
     });
   });
   document.getElementById('btn-buscar-cnpj').addEventListener('click', () => buscarCnpjEAtualizar(true));
-  document.getElementById('btn-salvar-responsavel').addEventListener('click', async () => {
-    estado.crm.nomeResponsavel = document.getElementById('f-nome-responsavel').value.trim();
-    estado.crm.whatsappResponsavel = document.getElementById('f-whatsapp-responsavel').value.trim();
-    await put('crm', estado.crm);
-    document.getElementById('msg-responsavel').textContent = 'Salvo.';
-    renderInstitucional();
-    notificarAtualizacao();
-  });
   if (!e && escola.cnpj) buscarCnpjEAtualizar(false);
 }
 
@@ -744,7 +710,6 @@ async function renderInteligencia() {
       <div id="posicao-mercado"><span class="loading-bar">Calculando...</span></div>
     </div>
 
-    <div class="drawer-section" id="secao-ia"></div>
 
     <div class="drawer-section">
       <h3>Concorrentes na região (do Censo Escolar — sem custo)</h3>
@@ -774,7 +739,6 @@ async function renderInteligencia() {
     </div>
   `;
 
-  montarSecaoIA();
   carregarConcorrentes();
   carregarPosicaoMercado();
 
@@ -871,6 +835,75 @@ function montarResultadoPesquisaHtml(registro) {
     ${linkMercado}
   `;
 
+}
+
+// =====================================================================
+// Aba: Evolução longitudinal — microdados oficiais do Inep
+// =====================================================================
+async function renderEvolucao() {
+  const painel = document.getElementById('painel-evolucao');
+  if (!painel) return;
+  painel.innerHTML = '<p class="loading-bar">Carregando série histórica do Inep...</p>';
+  try {
+    const [serie, diagnostico] = await Promise.all([
+      buscarSerieEscola(estado.escola.uf, estado.escola.id),
+      buscarDiagnosticoMunicipio(estado.escola.uf, estado.escola.municipio),
+    ]);
+    if (!serie?.registros?.length) {
+      painel.innerHTML = '<div class="drawer-section"><h3>Série histórica</h3><p class="sub">Esta escola não possui observações compatíveis na série pública de 2019–2025.</p></div>';
+      return;
+    }
+    const registros = serie.registros;
+    const valores = registros.map((r) => Number(r.matriculas) || 0);
+    const maximo = Math.max(...valores, 1);
+    const largura = 560;
+    const altura = 150;
+    const pontos = registros.map((r, i) => {
+      const x = registros.length === 1 ? largura / 2 : 20 + i * ((largura - 40) / (registros.length - 1));
+      const y = altura - 24 - ((Number(r.matriculas) || 0) / maximo) * (altura - 48);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const primeiro = registros[0];
+    const ultimo = registros.at(-1);
+    const variacao = primeiro.matriculas > 0 ? ((ultimo.matriculas - primeiro.matriculas) / primeiro.matriculas) * 100 : null;
+    const corRisco = { Alto: 'var(--danger)', Moderado: 'var(--icp-media)', Baixo: 'var(--icp-alta)' }[diagnostico?.riscoSaturacao] || 'var(--text-muted)';
+    painel.innerHTML = `
+      <div class="drawer-section">
+        <h3>Trajetória de matrículas</h3>
+        <div class="kpis" style="margin:10px 0;">
+          <div class="kpi"><div class="label">Primeira observação (${primeiro.ano})</div><div class="value">${fmtInt(primeiro.matriculas)}</div></div>
+          <div class="kpi"><div class="label">Última observação (${ultimo.ano})</div><div class="value">${fmtInt(ultimo.matriculas)}</div></div>
+          <div class="kpi"><div class="label">Variação no período</div><div class="value">${variacao == null ? '—' : `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)}%`}</div></div>
+        </div>
+        <svg viewBox="0 0 ${largura} ${altura}" style="width:100%;height:170px;background:var(--bg-surface-2);border-radius:var(--radius-sm);" role="img" aria-label="Série histórica de matrículas da escola">
+          <polyline points="${pontos}" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          ${registros.map((r, i) => {
+            const [x, y] = pontos.split(' ')[i].split(',');
+            return `<circle cx="${x}" cy="${y}" r="5" fill="var(--accent)"><title>${r.ano}: ${fmtInt(r.matriculas)} matrículas</title></circle><text x="${x}" y="${altura - 7}" text-anchor="middle" fill="var(--text-muted)" font-size="11">${r.ano}</text>`;
+          }).join('')}
+        </svg>
+      </div>
+      <div class="drawer-section">
+        <h3>Composição e estrutura por ano</h3>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>Ano</th><th>Matrículas</th><th>Infantil</th><th>Fundamental</th><th>Médio</th><th>Turmas</th><th>Alunos/turma</th><th>Docentes</th></tr></thead>
+          <tbody>${registros.map((r) => `<tr><td>${r.ano}</td><td>${fmtInt(r.matriculas)}</td><td>${fmtInt(r.infantil)}</td><td>${fmtInt(r.fundamental)}</td><td>${fmtInt(r.medio)}</td><td>${fmtInt(r.turmas)}</td><td>${r.turmas ? (r.matriculas / r.turmas).toFixed(1) : '—'}</td><td>${fmtInt(r.docentes)}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+      ${diagnostico ? `<div class="drawer-section">
+        <h3>Contexto do município</h3>
+        <p><span class="badge" style="border-color:${corRisco};color:${corRisco};">Pressão de saturação: ${diagnostico.riscoSaturacao}</span></p>
+        <div class="info-grid" style="margin-top:10px;">
+          <div><span class="k">Crescimento anual de matrículas privadas:</span> ${diagnostico.crescimentoMatriculasCagrPct == null ? '—' : `${diagnostico.crescimentoMatriculasCagrPct}%`}</div>
+          <div><span class="k">Crescimento anual da oferta:</span> ${diagnostico.crescimentoEscolasCagrPct == null ? '—' : `${diagnostico.crescimentoEscolasCagrPct}%`}</div>
+          <div><span class="k">Pressão oferta − demanda:</span> ${diagnostico.pressaoOfertaPp == null ? '—' : `${diagnostico.pressaoOfertaPp} p.p.`}</div>
+          <div><span class="k">Concentração das 3 maiores:</span> ${diagnostico.concentracaoTop3Pct == null ? '—' : `${diagnostico.concentracaoTop3Pct}%`}</div>
+        </div>
+        <p class="sub" style="margin-top:8px;">Sinal estatístico baseado na evolução de escolas e matrículas privadas; não representa capacidade física observada.</p>
+      </div>` : ''}
+      <div class="footer-note">Fonte: ${serie.fonte}. Série harmonizada pelo Nexo; somente escolas declaradas em funcionamento em cada edição.</div>`;
+  } catch (err) {
+    painel.innerHTML = `<div class="drawer-section"><h3>Série histórica</h3><p class="sub">Não foi possível carregar a camada longitudinal: ${err.message}</p></div>`;
+  }
 }
 
 // =====================================================================

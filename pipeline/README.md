@@ -7,6 +7,22 @@ python3 -m venv .venv-dados
 .venv-dados/bin/pip install -r pipeline/requirements-dados.txt
 ```
 
+## Atualizar a série longitudinal do Censo Escolar
+
+A camada publicada cobre 2019–2025 e harmoniza a mudança de layout de 2025,
+quando o Inep separou escolas, matrículas, turmas e docentes em tabelas
+distintas. Os ZIPs brutos ficam em `.cache/` e nunca são versionados:
+
+```bash
+python3 pipeline/baixar_microdados_inep.py
+python3 pipeline/pipeline_inep_longitudinal.py
+python3 pipeline/validar_inteligencia.py
+```
+
+O resultado é `data/inteligencia/resumo.json` mais um arquivo por UF em
+`data/inteligencia/escolas/`. O navegador recebe somente agregados e séries
+compactas; nenhuma tabela bruta do Inep é publicada.
+
 ## Atualizar a camada territorial
 
 O comando baixa os arquivos oficiais do IBGE, processa as 27 UFs e sobrescreve
