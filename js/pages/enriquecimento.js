@@ -288,9 +288,15 @@ async function processarFila() {
 }
 
 function exportarFilaPipeline() {
-  const escolas = todasCarregadas.filter((e) => e.fonte === 'osm');
+  const campos = ['id', 'nome', 'uf', 'municipio', 'bairro', 'endereco', 'cep', 'tel', 'email', 'fonte'];
+  const escolas = todasCarregadas
+    .filter((e) => e.fonte === 'osm' && !e.cnpj && e.qualidadeIdentidade?.incluirAnalise !== false)
+    .map((e) => ({
+      ...Object.fromEntries(campos.map((campo) => [campo, e[campo] ?? null])),
+      qualidadeIdentidade: { incluirAnalise: true },
+    }));
   baixarJson({
-    tipo: 'nexo_fila_enriquecimento', versao: 1,
+    tipo: 'nexo_fila_cnpj_compacta', versao: 1,
     exportadoEm: new Date().toISOString(), total: escolas.length, escolas,
   }, `nexo_fila_enriquecimento_${new Date().toISOString().slice(0, 10)}`);
   document.getElementById('msg-processamento-fila').textContent = `${fmtInt(escolas.length)} escolas exportadas para enriquecimento externo.`;

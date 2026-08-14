@@ -1,0 +1,90 @@
+name: Atualizar candidatos de CNPJ
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: "Snapshot da Receita (latest ou AAAA-MM)"
+        required: true
+        default: latest
+      arquivo_fila:
+        description: "Fila compacta dentro do repositório"
+        required: true
+        default: data/enriquecimento/fila_cnpj.json
+  schedule:
+    - cron: "23 5 15 * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-cnpj-publico
+  cancel-in-progress: false
+
+jobs:
+  enriquecer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FILA: ${{ inputs.arquivo_fila || 'data/enriquecimento/fila_cnpj.json' }}
+      SNAPSHOT: ${{ inputs.snapshot || 'latest' }}
+      RECEITA_CACHE: ${{ runner.temp }}/receita-cnpj
+      CANDIDATOS_TMP: ${{ runner.temp }}/cnpj-candidatos
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar a fila
+        shell: bash
+        run: |
+          test -f "$FILA"
+          python -c 'import json,os; d=json.load(open(os.environ["FILA"])); assert d.get("escolas"), "Fila vazia"; print(len(d["escolas"]), "escolas na fila")'
+
+      - name: Instalar dependências
+        run: pip install --disable-pip-version-check -r pipeline/requirements-cnpj.txt
+
+      - name: Baixar snapshot oficial em disco temporário
+        run: python pipeline/baixar_base_cnpj_receita.py --snapshot "$SNAPSHOT" --destino "$RECEITA_CACHE" --workers 6
+
+      - name: Localizar o snapshot baixado
+        shell: bash
+        run: |
+          RECEITA_DIR="$(find "$RECEITA_CACHE" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$RECEITA_DIR"
+          echo "RECEITA_DIR=$RECEITA_DIR" >> "$GITHUB_ENV"
+          echo "SNAPSHOT_REAL=$(basename "$RECEITA_DIR")" >> "$GITHUB_ENV"
+
+      - name: Gerar e validar candidatos
+        shell: bash
+        run: |
+          python pipeline/pipeline_cnpj_escolas_descobertas.py \
+            --pasta-receita "$RECEITA_DIR" \
+            --arquivo-escolas "$FILA" \
+            --saida "$CANDIDATOS_TMP" \
+            --snapshot "$SNAPSHOT_REAL"
+          python pipeline/validar_candidatos_cnpj.py "$CANDIDATOS_TMP" | tee resultado-cnpj.txt
+          cat resultado-cnpj.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar somente resultados compactos
+        shell: bash
+        run: |
+          mkdir -p data/cnpj_candidatos
+          cp "$CANDIDATOS_TMP"/*.json data/cnpj_candidatos/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cnpj_candidatos
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração de candidatos." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m "Atualiza candidatos CNPJ (${SNAPSHOT_REAL})"
+            git push
+          fi
+
+      - name: Confirmar descarte da base bruta
+        if: always()
+        run: echo "O runner e $RECEITA_CACHE serão descartados automaticamente ao final do job." >> "$GITHUB_STEP_SUMMARY"

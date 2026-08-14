@@ -64,3 +64,18 @@ O filtro considera estabelecimentos ativos com CNAE principal **ou secundário**
 de educação básica (`8511`, `8512`, `8513`, `8520`). A pontuação compara nome
 fantasia e razão social, município, CEP, bairro, logradouro/número, telefone e
 e-mail. O dump fica em `.cache/` e nunca deve ser versionado.
+
+## Automação sem armazenamento local
+
+O workflow `.github/workflows/enriquecer-cnpj.yml` executa no dia 15 de cada
+mês e também pode ser iniciado manualmente na aba **Actions** do GitHub. Ele:
+
+1. lê `data/enriquecimento/fila_cnpj.json`;
+2. baixa o snapshot oficial no disco temporário do runner;
+3. gera e valida os candidatos;
+4. publica somente `data/cnpj_candidatos/{UF}.json`;
+5. descarta a máquina e todo o dump bruto.
+
+Para substituir a fila usando uma exportação antiga ou completa, reduza-a com
+`pipeline/preparar_fila_cnpj.py`. A Central agora já exporta diretamente o
+formato compacto.

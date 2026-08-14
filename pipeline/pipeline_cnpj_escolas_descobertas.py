@@ -170,6 +170,7 @@ def main() -> None:
     parser.add_argument("--pasta-escolas", type=Path, default=Path("data/escolas"))
     parser.add_argument("--arquivo-escolas", type=Path, help="JSON exportado pela Central de Enriquecimento do Nexo")
     parser.add_argument("--saida", type=Path, default=Path("data/cnpj_candidatos"))
+    parser.add_argument("--snapshot", default="informado pelo operador", help="Identificação AAAA-MM da fonte")
     args = parser.parse_args()
 
     escolas = carregar_escolas(args.pasta_escolas, args.arquivo_escolas)
@@ -234,7 +235,7 @@ def main() -> None:
     args.saida.mkdir(parents=True, exist_ok=True)
     for uf in ufs:
         documento = {
-            "versao": "Receita Federal - snapshot informado pelo operador",
+            "versao": f"Receita Federal - snapshot {args.snapshot}",
             "uf": uf,
             "regra": "candidatos; requer confirmacao humana",
             "escolas": saida_por_uf.get(uf, {}),
