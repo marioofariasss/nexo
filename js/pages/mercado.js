@@ -4,7 +4,8 @@ import { distanciaKm, coordenadaValidaBrasil } from '../utils/geo.js';
 import { buscarEscolas, incorporarEscolasNaBase } from '../services/escolaService.js';
 import { importarUF, ufJaImportada } from '../services/importService.js';
 import { listarMunicipiosPorUF, buscarDadosDemograficos, resumirDemandaEscolar, projetarCoortesEscolares } from '../services/ibgeService.js';
-import { analisarTerritorioNoRaio, analisarTerritorioAgregado, calcularIndicadoresEducacionaisMunicipio, montarPerfilConsumo, listarRegioes, ufsDaRegiao } from '../services/socioeconomicoService.js';
+import { analisarTerritorioNoRaio, analisarTerritorioAgregado, analisarTerritorioMunicipio, calcularIndicadoresEducacionaisMunicipio, montarPerfilConsumo, listarRegioes, ufsDaRegiao } from '../services/socioeconomicoService.js';
+import { buscarSerieMunicipio, agregarSeriesUfs, agregarSeriesEscolas, diagnosticarSerie } from '../services/inteligenciaService.js';
 import { agruparPorRede, identificarRede, calcularScoreOportunidade, calcularRanking, montarFunil, gerarAnaliseCritica, gerarPlanoAcao, gerarGoToMarket, calcularConcentracaoMercado } from '../services/mercadoAnaliseService.js';
 import { gerarRelatorioPdf } from '../services/pdfReportService.js';
 import { geocodificarEndereco, buscarEscolasOSM, cruzarComCenso } from '../services/osmDescobertaService.js';
@@ -61,6 +62,7 @@ function skeleton() {
       <div><label>Escopo da análise</label>
         <select id="f-escopo">
           <option value="raio">Raio ao redor de um ponto</option>
+          <option value="municipio">Município inteiro</option>
           <option value="uf">Estado inteiro (UF)</option>
           <option value="regiao">Região (vários estados)</option>
         </select>
@@ -94,22 +96,11 @@ function skeleton() {
       </div>
       <div><button class="btn btn-primary" id="btn-analisar">Mapear região</button></div>
       <div id="campo-btn-osm"><button class="btn" id="btn-buscar-osm">Buscar escolas novas (OpenStreetMap)</button></div>
-      <div><button class="btn" id="btn-salvar-regiao">Salvar no histórico de mapeamentos</button></div>
     </div>
     <p class="sub" id="msg-osm"></p>
     <p class="sub" id="instrucao-mapa" style="margin-bottom:14px;">
       Clica no mapa pra marcar o centro da análise (ou escolhe um município/endereço acima pra centralizar automaticamente), ajusta o raio, e clica em "Mapear região".
     </p>
-
-    <div class="card" id="card-regioes-salvas">
-      <h2>Histórico de mapeamentos</h2>
-      <p class="sub">
-        As escolas descobertas já ficam salvas na base principal assim que um mapeamento roda — não é preciso
-        reabrir isto pra "recuperar" nada. Isto aqui é só um registro de quando/onde cada mapeamento foi feito,
-        útil pra saber se uma região já foi coberta antes.
-      </p>
-      <div id="lista-regioes-salvas"><span class="loading-bar">Carregando...</span></div>
-    </div>
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
@@ -215,6 +206,7 @@ function mediana(valores) {
 
 async function mapearRegiao() {
   const escopo = document.getElementById('f-escopo').value;
+  if (escopo === 'municipio') return analisarMunicipioInteiro();
   if (escopo === 'uf') return analisarUf();
   if (escopo === 'regiao') return analisarRegiaoMultiUf();
   return analisarRegiao();
@@ -250,9 +242,10 @@ async function analisarUf() {
   escolasNovasOsm = candidatasNaRegiao;
   desenharEscolasNoMapa();
   if (mapa) mapa.setView([-14.2, -51.9], 4); // sem ponto único pra centralizar — volta pra visão Brasil
-  renderResultados(naRegiao, null, null, null, porteReferencia, {
+  await renderResultados(naRegiao, null, null, null, porteReferencia, {
     territorio, perfilConsumo, candidatasNaRegiao,
     escopoLabel: `estado inteiro (${uf})`,
+    recorteLongitudinal: { tipo: 'ufs', ufs: [uf] },
   });
 }
 
@@ -285,9 +278,49 @@ async function analisarRegiaoMultiUf() {
   escolasNovasOsm = candidatasNaRegiao;
   desenharEscolasNoMapa();
   if (mapa) mapa.setView([-14.2, -51.9], 4);
-  renderResultados(naRegiao, null, null, null, porteReferencia, {
+  await renderResultados(naRegiao, null, null, null, porteReferencia, {
     territorio, perfilConsumo, candidatasNaRegiao,
     escopoLabel: `região ${nomeRegiao} (${ufs.length} estados)`,
+    recorteLongitudinal: { tipo: 'ufs', ufs },
+  });
+}
+
+async function analisarMunicipioInteiro() {
+  const resultadosDiv = document.getElementById('resultados-mercado');
+  const uf = document.getElementById('f-uf').value;
+  if (!uf || !municipioSelecionado) {
+    resultadosDiv.innerHTML = '<div class="card"><p class="sub">Selecione a UF e o município antes de analisar o município inteiro.</p></div>';
+    return;
+  }
+  resultadosDiv.innerHTML = '<p class="loading-bar">Carregando escolas, demografia e histórico do município...</p>';
+  if (!(await ufJaImportada(uf))) await importarUF(uf, `escolas/${uf}.json`).catch(() => {});
+  const todasDaUf = await buscarEscolas({ uf, somenteAnalise: true });
+  const alvo = municipioSelecionado.nome.trim().toLocaleLowerCase('pt-BR');
+  const encontradas = todasDaUf.filter((e) => (e.municipio || '').trim().toLocaleLowerCase('pt-BR') === alvo);
+  const candidatasNaRegiao = encontradas.filter((e) => e.fonte === 'osm' && e.qualidadeIdentidade?.status === 'candidata_privada_revisao');
+  const escolas = encontradas.filter((e) => e.fonte !== 'osm' || e.qualidadeIdentidade?.status === 'identidade_confirmada_cnpj');
+  let demografia = null;
+  let demandaEscolar = null;
+  try {
+    demografia = await buscarDadosDemograficos(municipioSelecionado.id);
+    if (demografia.faixasEtarias?.length) demandaEscolar = resumirDemandaEscolar(demografia.faixasEtarias);
+  } catch (err) { demografia = { erro: err.message }; }
+  const indicadoresMunicipais = demandaEscolar ? calcularIndicadoresEducacionaisMunicipio(todasDaUf, municipioSelecionado.nome, demandaEscolar) : null;
+  const projecaoCoortes = demografia?.natalidade
+    ? projetarCoortesEscolares(demografia.natalidade, indicadoresMunicipais?.penetracao?.infantil ?? indicadoresMunicipais?.penetracaoTotal ?? null)
+    : null;
+  const [territorio, perfilConsumo] = await Promise.all([
+    analisarTerritorioMunicipio({ uf, codigoMunicipio: municipioSelecionado.id }),
+    montarPerfilConsumo({ uf, rendaPerCapitaMunicipal: demografia?.rendaDomiciliarPerCapita?.media }),
+  ]);
+  const porteReferencia = document.getElementById('f-porte-referencia').value;
+  ultimosResultados = escolas;
+  escolasNovasOsm = candidatasNaRegiao;
+  desenharEscolasNoMapa();
+  await renderResultados(escolas, null, demografia, demandaEscolar, porteReferencia, {
+    territorio, indicadoresMunicipais, projecaoCoortes, perfilConsumo, candidatasNaRegiao,
+    escopoLabel: `município de ${municipioSelecionado.nome}/${uf}`,
+    recorteLongitudinal: { tipo: 'municipio', uf, municipio: municipioSelecionado.nome },
   });
 }
 
@@ -342,14 +375,16 @@ async function analisarRegiao() {
   ultimosResultados = naRegiao;
   escolasNovasOsm = candidatasNaRegiao;
   desenharEscolasNoMapa();
-  renderResultados(naRegiao, raioKm, demografia, demandaEscolar, porteReferencia, {
+  await renderResultados(naRegiao, raioKm, demografia, demandaEscolar, porteReferencia, {
     territorio, indicadoresMunicipais, projecaoCoortes, perfilConsumo, candidatasNaRegiao,
+    recorteLongitudinal: { tipo: 'escolas', escolas: naRegiao },
   });
 }
 
-function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteReferencia, extras = {}) {
-  const { territorio = null, indicadoresMunicipais = null, projecaoCoortes = null, perfilConsumo = null, candidatasNaRegiao = [], escopoLabel = `raio de ${raioKm}km` } = extras;
+async function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteReferencia, extras = {}) {
+  const { territorio = null, indicadoresMunicipais = null, projecaoCoortes = null, perfilConsumo = null, candidatasNaRegiao = [], escopoLabel = `raio de ${raioKm}km`, recorteLongitudinal = null } = extras;
   const resultadosDiv = document.getElementById('resultados-mercado');
+  const inteligencia = await carregarInteligenciaDoRecorte(recorteLongitudinal).catch((erro) => ({ erro: erro.message }));
   const totalMat = escolas.reduce((s, e) => s + (e.mat25 || 0), 0);
   const comTicket = escolas.filter((e) => e.mensalidade != null);
   const ticketMedio = comTicket.length ? comTicket.reduce((s, e) => s + e.mensalidade, 0) / comTicket.length : null;
@@ -365,6 +400,7 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
 
   // --- Camada 5: Clusters por rede ---
   const clusters = agruparPorRede(escolas);
+  const concentracao = calcularConcentracaoMercado(escolas);
 
   // --- Camada 6: Ranking com relevância e distância ---
   const ranking = calcularRanking(escolas, centro, raioKm);
@@ -414,10 +450,13 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
       <div class="kpi"><div class="label"><i class="fa-solid fa-scale-balanced"></i> Renda domiciliar per capita mediana</div><div class="value">${fmtMoedaExata(demografia?.rendaDomiciliarPerCapita?.mediana)}</div><div class="sub">Município · Censo 2022</div></div>
       <div class="kpi"><div class="label"><i class="fa-solid fa-magnifying-glass-location"></i> Candidatas descobertas</div><div class="value">${fmtInt(candidatasNaRegiao.length)}</div><div class="sub">Visíveis no mapa; fora dos indicadores até confirmação</div></div>
     </div>
+    ${montarConclusaoHtml('Leitura do recorte', concluirVisaoGeral(escolas, totalMat, ticketMedio, scoreOportunidade, escopoLabel))}
+
+    ${montarInteligenciaRecorteHtml(inteligencia, escopoLabel)}
 
     ${candidatasNaRegiao.length ? `<div class="card">
       <h2>Fila de validação de novas escolas</h2>
-      <p class="sub">${fmtInt(candidatasNaRegiao.length)} registros do OpenStreetMap parecem escolas privadas neste raio, mas ainda não têm identidade confirmada. Eles aparecem como pins laranja e não alteram score, concorrência, matrículas ou ticket. Confirme o CNPJ pela Central de Enriquecimento para promovê-los à análise.</p>
+      <p class="sub">${fmtInt(candidatasNaRegiao.length)} registros do OpenStreetMap parecem escolas privadas neste recorte, mas ainda não têm identidade confirmada. Eles aparecem separadamente no mapa e não alteram score, concorrência, matrículas ou ticket. Confirme a identidade antes de incorporá-los à análise.</p>
     </div>` : ''}
 
     ${demandaEscolar ? `
@@ -426,10 +465,11 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
       <p class="sub">
         População do município por faixa etária (IBGE) comparada com matrículas por etapa das escolas na região —
         idades exatas do Censo 2022 agrupadas nas etapas educacionais. População é demanda potencial, não uma
-        estimativa de procura por escola privada; as matrículas consideram somente o raio selecionado.
+        estimativa de procura por escola privada; as matrículas consideram o recorte selecionado.
       </p>
       <div style="position:relative;height:280px;"><canvas id="chart-demanda-oferta"></canvas></div>
       ${montarPenetracaoHtml(indicadoresMunicipais)}
+      ${montarConclusaoHtml('Conclusão sobre demanda e oferta', concluirDemandaOferta(demandaEscolar, indicadoresMunicipais, escolas))}
     </div>` : ''}
 
     ${montarNatalidadeHtml(demografia?.natalidade, projecaoCoortes)}
@@ -442,6 +482,7 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
         observada no Censo, projetada linearmente. Trate como cenário ilustrativo, não previsão oficial.
       </p>
       <div style="position:relative;height:260px;"><canvas id="chart-projecao"></canvas></div>
+      ${montarConclusaoHtml('Conclusão sobre a tendência recente', concluirTendenciaRecente(escolas))}
     </div>
 
     <div class="dash-section-header"><i class="fa-solid fa-chart-column"></i> Perfil das escolas na região</div>
@@ -455,12 +496,14 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
         <div style="position:relative;height:260px;"><canvas id="chart-ticket-regiao"></canvas></div>
       </div>
     </div>
+    ${montarConclusaoHtml('Conclusão sobre o perfil da oferta', concluirPerfilOferta(escolas, comTicket, ticketMedio))}
 
     ${demografia && demografia.faixasEtarias && demografia.faixasEtarias.length ? `
     <div class="card">
       <h2>População por faixa etária — ${municipioSelecionado.nome}/${municipioSelecionado.uf} (IBGE, Censo 2022)</h2>
       <p class="sub">Dado do município inteiro, não só da área do raio — use como referência de escala.</p>
       <div style="position:relative;height:260px;"><canvas id="chart-idade-municipio"></canvas></div>
+      ${montarConclusaoHtml('Conclusão demográfica', concluirEstruturaEtaria(demografia.faixasEtarias))}
     </div>` : demografia && demografia.erro ? `
     <div class="card"><h2>Dados demográficos do IBGE</h2><p class="sub">Não foi possível carregar agora: ${demografia.erro}</p></div>
     ` : ''}
@@ -477,12 +520,14 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
         </div>
         <p class="sub" style="margin-top:8px;">${fmtInt(clusters.semRedeIdentificada)} de ${fmtInt(clusters.totalEscolas)} escolas na região são independentes ou de rede não reconhecida pelo padrão de nome — ${clusters.redes.length ? 'região ' + (clusters.redes[0].quantidade / clusters.totalEscolas > 0.3 ? 'com presença forte de rede dominante' : 'fragmentada entre várias redes/independentes') : ''}.</p>
       ` : '<p class="sub">Nenhuma rede conhecida identificada nesta região — provavelmente dominada por escolas independentes.</p>'}
+      ${montarConclusaoHtml('Conclusão sobre redes', concluirRedes(clusters))}
     </div>
 
     <div class="dash-section-header"><i class="fa-solid fa-chart-line"></i> Região vs. média estadual vs. média nacional</div>
     <div class="card">
       <p class="sub">${mediasNacionais ? '' : 'Médias nacionais ainda carregando ou indisponíveis — a comparação usa só região e UF enquanto isso.'}</p>
       <div id="comparativo-regiao"></div>
+      ${montarConclusaoHtml('Como interpretar a comparação', ['Compare escala, ticket e evolução sem tratar a média como meta: diferenças territoriais, renda e composição por etapa podem explicar desvios relevantes.'])}
     </div>
 
     <div class="dash-section-header"><i class="fa-solid fa-chart-pie"></i> Concentração de mercado na região</div>
@@ -491,7 +536,8 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
         Quais escolas concentram o maior volume de matrículas nesta região — dados comerciais/estruturais, não
         perfil de responsável. Ajuda a ver se o mercado depende de poucas escolas grandes ou está pulverizado.
       </p>
-      ${montarConcentracaoHtml(calcularConcentracaoMercado(escolas))}
+      ${montarConcentracaoHtml(concentracao)}
+      ${montarConclusaoHtml('Conclusão sobre concentração', concluirConcentracao(concentracao))}
     </div>
 
     ${porteReferencia ? `
@@ -500,6 +546,7 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
       <div class="kpi"><div class="label">Concorrentes diretos (mesmo porte)</div><div class="value">${fmtInt(diretos.length)}</div></div>
       <div class="kpi"><div class="label">Ticket médio dos diretos</div><div class="value">${ticketMedioDiretos != null ? fmtMoedaCompacta(ticketMedioDiretos) : '-'}</div></div>
       <div class="kpi"><div class="label">Concorrentes indiretos (outros portes)</div><div class="value">${fmtInt(indiretos.length)}</div></div>
+      ${montarConclusaoHtml('Conclusão do benchmark', [`O porte escolhido encontra ${fmtInt(diretos.length)} escolas comparáveis e ${fmtInt(indiretos.length)} de outros portes. Use esse grupo para comparar estrutura e escala; sem porte de referência, a análise permanece agregada.`])}
     </div>` : ''}
 
     ${montarTerritorioHtml(territorio, escopoLabel)}
@@ -509,6 +556,7 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
     <div class="dash-section-header"><i class="fa-solid fa-filter"></i> Funil de mercado regional</div>
     <div class="card">
       ${montarFunilHtml(funil)}
+      ${montarConclusaoHtml('Conclusão sobre o funil', concluirFunil(funil))}
     </div>
 
     <div class="dash-section-header"><i class="fa-solid fa-file-lines"></i> Relatório da região</div>
@@ -527,10 +575,10 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2>Ranking de concorrentes diretos</h2>
+      <h2>Escolas com maior relevância no recorte</h2>
         <button class="btn" id="btn-exportar-ranking">Exportar CSV</button>
       </div>
-      <p class="sub">Ordenado por relevância (ticket médio × porte × proximidade do centro marcado) — clique numa linha pra abrir a ficha</p>
+      <p class="sub">Ordenado por relevância estatística (ticket médio × porte${raioKm != null ? ' × proximidade do centro marcado' : ''}) — clique numa linha pra abrir a ficha</p>
       <div class="table-scroll">
         <table class="data-table">
           <thead><tr><th>#</th><th>Escola</th><th>Porte</th><th>Matrículas</th><th>Ticket médio</th><th>Faturamento potencial</th><th>Distância</th><th>Sinal de matrículas</th><th>Telefone</th>${porteReferencia ? '<th>Classificação</th>' : ''}</tr></thead>
@@ -571,15 +619,156 @@ function renderResultados(escolas, raioKm, demografia, demandaEscolar, porteRefe
   if (demografia && demografia.faixasEtarias && demografia.faixasEtarias.length) renderChartIdade(demografia.faixasEtarias);
   if (demandaEscolar) renderChartDemandaOferta(demandaEscolar, escolas);
   renderChartProjecao(escolas, totalMat);
+  renderChartInteligencia(inteligencia?.serie || []);
   renderComparativoRegiao(escolas, scoreOportunidade, demografia);
 
   const analiseCritica = gerarAnaliseCritica({
     escolas, scoreOportunidade, demandaEscolar, populacaoIdadeEscolar,
-    matriculasRegiao: totalMat, clusters, ticketMedioNacional: mediasNacionais?.ticketMedio, raioKm,
+    matriculasRegiao: totalMat, clusters, ticketMedioNacional: mediasNacionais?.ticketMedio,
+    raioKm: Number.isFinite(raioKm) ? raioKm : undefined,
   });
   document.getElementById('conteudo-analise-critica').innerHTML = montarAnaliseCriticaHtml(analiseCritica);
   ultimaAnaliseParaPdf = { escolas, raioKm, escopoLabel, totalMat, ticketMedio, demografia, municipioSelecionado, scoreOportunidade, analiseCritica, ranking };
   document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPdf);
+}
+
+async function carregarInteligenciaDoRecorte(recorte) {
+  if (!recorte) return null;
+  if (recorte.tipo === 'municipio') {
+    const serie = await buscarSerieMunicipio(recorte.uf, recorte.municipio);
+    return { serie, diagnostico: diagnosticarSerie(serie), metodologia: 'Série territorial completa do município, redes pública e privada, Censo Escolar Inep 2019–2025.' };
+  }
+  if (recorte.tipo === 'ufs') {
+    const serie = await agregarSeriesUfs(recorte.ufs);
+    return { serie, diagnostico: diagnosticarSerie(serie), metodologia: `Série territorial completa agregada de ${recorte.ufs.length} UF${recorte.ufs.length > 1 ? 's' : ''}, Censo Escolar Inep 2019–2025.` };
+  }
+  if (recorte.tipo === 'escolas') {
+    const agregado = await agregarSeriesEscolas(recorte.escolas);
+    return {
+      ...agregado, diagnostico: diagnosticarSerie(agregado.serie),
+      metodologia: 'Coorte fixa das escolas que estão no raio atual e possuem histórico no Inep. Não inclui escolas que existiam no local e fecharam antes do recorte atual.',
+    };
+  }
+  return null;
+}
+
+function formatarVariacao(valor) {
+  if (valor == null || !Number.isFinite(Number(valor))) return '-';
+  return `${valor >= 0 ? '+' : ''}${Number(valor).toFixed(1)}% a.a.`;
+}
+
+function montarInteligenciaRecorteHtml(inteligencia, escopoLabel) {
+  if (!inteligencia || inteligencia.erro || !inteligencia.serie?.length) return `
+    <div class="dash-section-header"><i class="fa-solid fa-chart-line"></i> Evolução histórica do recorte</div>
+    <div class="card"><p class="sub">A série longitudinal não ficou disponível para este recorte${inteligencia?.erro ? `: ${inteligencia.erro}` : '.'}</p></div>`;
+  const d = inteligencia.diagnostico;
+  const cobertura = inteligencia.escolasSolicitadas != null
+    ? `${fmtInt(inteligencia.escolasComHistorico)} de ${fmtInt(inteligencia.escolasSolicitadas)} escolas atuais com histórico`
+    : 'cobertura territorial completa';
+  return `
+    <div class="dash-section-header"><i class="fa-solid fa-chart-line"></i> Evolução 2019–2025 · ${escopoLabel}</div>
+    <div class="card">
+      <p class="sub">${inteligencia.metodologia} Cobertura: ${cobertura}. A pressão de oferta é a diferença entre o crescimento anual de escolas e o crescimento anual de matrículas.</p>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Matrículas privadas · ${d.final.ano}</div><div class="value">${fmtInt(d.final.matriculasPrivadas)}</div><div class="sub">${formatarVariacao(d.crescimentoMatriculasCagrPct)}</div></div>
+        <div class="kpi"><div class="label">Escolas privadas · ${d.final.ano}</div><div class="value">${fmtInt(d.final.escolasPrivadas)}</div><div class="sub">${formatarVariacao(d.crescimentoEscolasCagrPct)}</div></div>
+        <div class="kpi"><div class="label">Pressão da oferta</div><div class="value">${d.pressaoOfertaPp == null ? '-' : `${d.pressaoOfertaPp >= 0 ? '+' : ''}${d.pressaoOfertaPp.toFixed(1)} p.p.`}</div><div class="sub">oferta menos demanda, ao ano</div></div>
+        <div class="kpi"><div class="label">Risco estatístico de saturação</div><div class="value">${d.riscoSaturacao}</div><div class="sub">sinal comparativo, não capacidade física</div></div>
+        <div class="kpi"><div class="label">Alunos por escola privada</div><div class="value">${d.final.alunosPorEscolaPrivada == null ? '-' : d.final.alunosPorEscolaPrivada.toFixed(0)}</div><div class="sub">${d.inicial.alunosPorEscolaPrivada == null ? 'sem base inicial' : `${d.inicial.alunosPorEscolaPrivada.toFixed(0)} em ${d.inicial.ano}`}</div></div>
+        <div class="kpi"><div class="label">Participação privada</div><div class="value">${d.final.participacaoPrivadaPct == null ? '-' : `${d.final.participacaoPrivadaPct.toFixed(1)}%`}</div><div class="sub">${d.inicial.participacaoPrivadaPct == null ? 'indisponível no recorte por raio' : `${d.inicial.participacaoPrivadaPct.toFixed(1)}% em ${d.inicial.ano}`}</div></div>
+      </div>
+      <div style="position:relative;height:280px;margin-top:14px;"><canvas id="chart-inteligencia-recorte"></canvas></div>
+      ${montarConclusaoHtml('Conclusão longitudinal', concluirLongitudinal(inteligencia))}
+    </div>`;
+}
+
+function montarConclusaoHtml(titulo, itens) {
+  const validos = (itens || []).filter(Boolean);
+  if (!validos.length) return '';
+  return `<div style="margin-top:14px;padding:12px 14px;border-left:4px solid var(--accent);background:var(--bg-surface-2);border-radius:0 8px 8px 0;">
+    <strong style="font-size:12.5px;"><i class="fa-solid fa-lightbulb"></i> ${titulo}</strong>
+    <ul style="font-size:12px;line-height:1.55;margin:7px 0 0;padding-left:18px;">${validos.map((item) => `<li>${item}</li>`).join('')}</ul>
+  </div>`;
+}
+
+function concluirVisaoGeral(escolas, totalMat, ticketMedio, score, escopoLabel) {
+  const media = escolas.length ? totalMat / escolas.length : 0;
+  return [
+    `${escopoLabel} reúne ${fmtInt(escolas.length)} escolas e ${fmtInt(totalMat)} matrículas privadas, média de ${fmtInt(media)} alunos por escola.`,
+    `O score sintético é ${score.classificacao.toLowerCase()} (${score.score}/100) e deve ser lido junto da evolução histórica abaixo${ticketMedio == null ? '; a cobertura de mensalidades é insuficiente para concluir sobre preço.' : `; o ticket observado é ${fmtMoedaCompacta(ticketMedio)}.`}`,
+  ];
+}
+
+function concluirLongitudinal(inteligencia) {
+  const d = inteligencia.diagnostico;
+  if (!d) return ['Série insuficiente para formar uma leitura longitudinal.'];
+  const relacao = d.pressaoOfertaPp == null ? 'não pôde ser calculada' : d.pressaoOfertaPp >= 0.5
+    ? 'a oferta cresceu mais rápido que as matrículas, elevando a disputa média por aluno'
+    : d.pressaoOfertaPp <= -0.5
+      ? 'as matrículas cresceram mais rápido que o número de escolas, reduzindo a pressão relativa da oferta'
+      : 'oferta e matrículas evoluíram em ritmos próximos';
+  const participacao = d.inicial.participacaoPrivadaPct != null && d.final.participacaoPrivadaPct != null
+    ? `A participação privada mudou de ${d.inicial.participacaoPrivadaPct.toFixed(1)}% para ${d.final.participacaoPrivadaPct.toFixed(1)}%.`
+    : null;
+  return [`Entre ${d.inicial.ano} e ${d.final.ano}, ${relacao}. O risco estatístico de saturação é ${d.riscoSaturacao.toLowerCase()}.`, participacao];
+}
+
+function concluirDemandaOferta(demanda, indicadores, escolas) {
+  if (!demanda) return [];
+  if (!indicadores) return ['A população representa o município inteiro e a oferta representa o recorte pesquisado; por isso, não é válido interpretar a diferença como demanda não atendida.'];
+  const maior = Object.entries(indicadores.penetracao || {}).filter(([, v]) => v != null).sort((a, b) => b[1] - a[1])[0];
+  return [maior ? `A maior presença privada relativa está em ${maior[0]}, com ${pct(maior[1])} da população correspondente matriculada na rede privada.` : null, `A leitura combina ${fmtInt(escolas.length)} escolas privadas com a estrutura etária municipal; migração escolar entre municípios não está capturada.`];
+}
+
+function concluirTendenciaRecente(escolas) {
+  const crescem = escolas.filter((e) => Number(e.mat25) > Number(e.mat24)).length;
+  const caem = escolas.filter((e) => Number(e.mat25) < Number(e.mat24)).length;
+  return [`No último intervalo observado, ${fmtInt(crescem)} escolas cresceram e ${fmtInt(caem)} recuaram. A série longitudinal 2019–2025 acima é a referência mais robusta para separar oscilação anual de tendência.`];
+}
+
+function concluirPerfilOferta(escolas, comTicket, ticketMedio) {
+  return [`Há informação de mensalidade para ${fmtInt(comTicket.length)} de ${fmtInt(escolas.length)} escolas (${escolas.length ? ((comTicket.length / escolas.length) * 100).toFixed(0) : 0}% de cobertura)${ticketMedio != null ? `, com média de ${fmtMoedaCompacta(ticketMedio)}` : ''}. Interprete a distribuição de preço considerando essa cobertura.`];
+}
+
+function concluirEstruturaEtaria(faixas) {
+  const validas = (faixas || []).filter((f) => Number.isFinite(Number(f.valor ?? f.populacao)));
+  if (!validas.length) return ['A estrutura etária não possui cobertura suficiente para uma conclusão.'];
+  const maior = [...validas].sort((a, b) => Number(b.valor ?? b.populacao) - Number(a.valor ?? a.populacao))[0];
+  const nome = maior.faixa || maior.label || maior.idade || 'a maior faixa observada';
+  return [`A maior faixa etária observada é ${nome}, com ${fmtInt(maior.valor ?? maior.populacao)} pessoas. A distribuição ajuda a identificar quais etapas terão maior base potencial, sem equivaler a procura privada.`];
+}
+
+function concluirRedes(clusters) {
+  const pctIndependentes = clusters.totalEscolas ? (clusters.semRedeIdentificada / clusters.totalEscolas) * 100 : 0;
+  return [`${pctIndependentes.toFixed(0)}% das escolas não foram associadas a uma rede pelo nome. Isso sugere ${pctIndependentes >= 70 ? 'mercado predominantemente independente' : 'presença relevante de grupos identificáveis'}, sujeito a falsos negativos na identificação textual.`];
+}
+
+function concluirConcentracao(c) {
+  if (!c.top.length) return ['Sem matrículas conhecidas suficientes para medir concentração.'];
+  const leitura = c.concentracaoTop3 >= 60 ? 'alta dependência de poucas escolas líderes' : c.concentracaoTop3 <= 30 ? 'distribuição pulverizada das matrículas' : 'concentração intermediária';
+  return [`As três maiores concentram ${c.concentracaoTop3.toFixed(1)}% das matrículas conhecidas, indicando ${leitura}.`];
+}
+
+function concluirFunil(funil) {
+  if (!funil.length) return ['Selecione um município para relacionar população, demanda escolar e oferta privada no mesmo funil.'];
+  return ['Cada etapa usa uma base conceitual diferente; o estreitamento orienta comparação de escala, mas não representa conversão observada de famílias.'];
+}
+
+function renderChartInteligencia(serie) {
+  destroyChart('inteligencia');
+  const el = document.getElementById('chart-inteligencia-recorte');
+  if (!el || !serie.length) return;
+  charts.inteligencia = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: serie.map((r) => r.ano),
+      datasets: [
+        { label: 'Matrículas privadas', data: serie.map((r) => r.matriculasPrivadas), borderColor: '#0B7A75', backgroundColor: 'rgba(11,122,117,.12)', yAxisID: 'y', tension: .25 },
+        { label: 'Escolas privadas', data: serie.map((r) => r.escolasPrivadas), borderColor: '#D97706', backgroundColor: 'rgba(217,119,6,.10)', yAxisID: 'y1', tension: .25 },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: iconTextColor() } } }, scales: { y: { beginAtZero: true, ticks: { color: iconTextColor() } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: iconTextColor() } }, x: { ticks: { color: iconTextColor() } } } },
+  });
 }
 
 function montarAnaliseCriticaHtml(a) {
@@ -716,6 +905,7 @@ function montarNatalidadeHtml(natalidade, projecao) {
         </table>
         <p class="sub" style="margin-top:8px;">Cenários de conversão privada: conservador ${pct(projecao.cenarios.conservador)}, base ${pct(projecao.cenarios.base)} e otimista ${pct(projecao.cenarios.otimista)}. Não há ajuste de sobrevivência ou migração; é uma projeção de coorte, não promessa de matrícula.</p>
       ` : ''}
+      ${montarConclusaoHtml('Conclusão sobre as próximas coortes', [variacao == null ? 'A série de nascimentos ainda não permite calcular a variação do período.' : variacao < -5 ? `Os nascimentos recuaram ${Math.abs(variacao).toFixed(1)}% no período, sinalizando pressão demográfica futura sobre as etapas iniciais.` : variacao > 5 ? `Os nascimentos cresceram ${variacao.toFixed(1)}% no período, ampliando a base potencial futura das etapas iniciais.` : `Os nascimentos variaram ${variacao.toFixed(1)}% no período, sugerindo relativa estabilidade da base potencial futura.`])}
     </div>`;
 }
 
@@ -739,6 +929,7 @@ function montarTerritorioHtml(territorio, escopoLabel) {
         <div class="kpi"><div class="label">Cobertura do indicador de renda</div><div class="value">${territorio.coberturaRendaPct != null ? territorio.coberturaRendaPct.toFixed(1) + '%' : '-'}</div></div>
       </div>
       <p class="sub" style="margin-top:8px;">${territorio.aproximacaoEspacial}</p>
+      ${montarConclusaoHtml('Conclusão territorial', [`O recorte cobre ${fmtInt(territorio.moradores)} moradores, dos quais ${fmtInt(pop0a19)} têm de 0 a 19 anos. A renda média do responsável é ${territorio.rendaResponsavelMedia != null ? fmtMoedaCompacta(territorio.rendaResponsavelMedia) : 'indisponível'} e possui ${territorio.coberturaRendaPct != null ? territorio.coberturaRendaPct.toFixed(1) + '%' : 'cobertura não informada'} dos domicílios com indicador utilizável.`])}
     </div>`;
 }
 
@@ -754,6 +945,7 @@ function montarConsumoHtml(perfil, renda) {
         <div class="kpi"><div class="label">Renda per capita média municipal</div><div class="value">${fmtMoedaExata(renda?.media)}</div><div class="sub">Censo 2022</div></div>
       </div>
       <p class="sub" style="margin-top:8px;">${perfil.observacao}</p>
+      ${montarConclusaoHtml('Conclusão sobre poder de compra', [perfil.indicePoderCompraBrasil100 == null ? 'O índice de poder de compra não pôde ser calculado para este recorte.' : `O poder de compra municipal está ${perfil.indicePoderCompraBrasil100 >= 105 ? 'acima' : perfil.indicePoderCompraBrasil100 <= 95 ? 'abaixo' : 'próximo'} da referência nacional (índice ${perfil.indicePoderCompraBrasil100.toFixed(0)}, Brasil = 100). Esse dado qualifica a capacidade econômica, mas não mede intenção de matrícula privada.`])}
     </div>`;
 }
 
@@ -776,7 +968,7 @@ function montarRelatorioHtml(escolas, escopoLabel, totalMat, ticketMedio, demogr
     partes.push(`Não foram encontrados concorrentes diretos (mesmo porte ${labelPorte(porteReferencia)}) dentro deste raio — pode indicar um nicho de mercado pouco disputado nessa faixa, ou dado insuficiente na base pra essa região.`);
   }
   if (territorio?.rendaResponsavelMedia != null) {
-    partes.push(`No recorte aproximado do raio, ${fmtInt(territorio.setores)} setores censitários somam ${fmtInt(territorio.moradores)} moradores e renda média de <strong>${fmtMoedaCompacta(territorio.rendaResponsavelMedia)}</strong> para a pessoa responsável pelo domicílio.`);
+    partes.push(`No recorte territorial analisado, ${fmtInt(territorio.setores)} setores censitários somam ${fmtInt(territorio.moradores)} moradores e renda média de <strong>${fmtMoedaCompacta(territorio.rendaResponsavelMedia)}</strong> para a pessoa responsável pelo domicílio.`);
   }
   if (indicadoresMunicipais?.penetracaoTotal != null) {
     partes.push(`A razão agregada entre matrículas privadas e população das faixas escolares no município é de <strong>${pct(indicadoresMunicipais.penetracaoTotal)}</strong>, usando Censo Escolar 2025 e população do Censo 2022.`);
@@ -1271,7 +1463,6 @@ function ligarFiltros() {
   document.getElementById('btn-analisar').addEventListener('click', mapearRegiao);
   document.getElementById('btn-buscar-endereco').addEventListener('click', buscarPorEndereco);
   document.getElementById('btn-buscar-osm').addEventListener('click', buscarViaOsm);
-  document.getElementById('btn-salvar-regiao').addEventListener('click', abrirModalSalvarRegiao);
   aplicarEscopoNaInterface();
 }
 
@@ -1315,9 +1506,11 @@ function aplicarEscopoNaInterface() {
   document.getElementById('campo-regiao').classList.toggle('hidden', escopo !== 'regiao');
   const permitidas = escopo === 'regiao' ? ufsDaRegiao(document.getElementById('f-regiao').value) : null;
   preencherUfsPermitidas(permitidas);
-  document.getElementById('btn-analisar').textContent = escopo === 'regiao' ? 'Analisar Grande Região' : escopo === 'uf' ? 'Analisar estado' : 'Analisar ponto/raio';
+  document.getElementById('btn-analisar').textContent = escopo === 'regiao' ? 'Analisar Grande Região' : escopo === 'uf' ? 'Analisar estado' : escopo === 'municipio' ? 'Analisar município' : 'Analisar ponto/raio';
   document.getElementById('instrucao-mapa').textContent = escopo === 'raio'
     ? 'Escolha UF e município, use uma capital, busque um endereço ou marque um ponto. O funil permanece aberto para você voltar a estado ou Grande Região.'
+    : escopo === 'municipio'
+      ? 'Escolha UF e município. A análise usará o território municipal completo, incluindo sua série histórica 2019–2025.'
     : escopo === 'uf'
       ? 'Analise o estado inteiro ou continue refinando por município, capital, endereço e raio para descobrir novas escolas sem perder o contexto estadual.'
       : 'Analise a Grande Região e continue o funil escolhendo um estado, capital/município, endereço e raio. Nenhum campo desaparece.';
@@ -1362,7 +1555,6 @@ function init() {
   initMapa();
   ligarFiltros();
   ligarToggleMapa();
-  renderRegioesSalvas();
   aplicarParametrosUrl();
 }
 

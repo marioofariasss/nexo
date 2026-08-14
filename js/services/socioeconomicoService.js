@@ -130,6 +130,28 @@ export async function analisarTerritorioAgregado({ ufs }) {
   };
 }
 
+export async function analisarTerritorioMunicipio({ uf, codigoMunicipio }) {
+  const documento = await carregarTerritorioUF(uf);
+  if (!documento || !codigoMunicipio) return null;
+  const registros = documento.registros.filter((r) => String(r.municipio) === String(codigoMunicipio));
+  if (!registros.length) return null;
+  const domicilios = somar(registros, 'domicilios');
+  const domiciliosComRenda = registros.reduce((s, r) => s + (r.rendaResponsavelMedia != null ? Number(r.domicilios) || 0 : 0), 0);
+  return {
+    ufs: [uf], setores: registros.length, domicilios,
+    moradores: somar(registros, 'moradores'),
+    rendaResponsavelMedia: mediaPonderada(registros, 'rendaResponsavelMedia', 'domicilios'),
+    rendaResponsavelMedianaAproximada: medianaPonderada(registros, 'rendaResponsavelMediana', 'domicilios'),
+    coberturaRendaPct: domicilios ? (domiciliosComRenda / domicilios) * 100 : null,
+    populacao: {
+      faixa0a4: somar(registros, 'pop0a4'), faixa5a9: somar(registros, 'pop5a9'),
+      faixa10a14: somar(registros, 'pop10a14'), faixa15a19: somar(registros, 'pop15a19'),
+    },
+    metodologia: documento.metodologia, versao: documento.versao,
+    aproximacaoEspacial: 'Todos os setores censitários associados ao município selecionado; sem aproximação por raio.',
+  };
+}
+
 export function calcularIndicadoresEducacionaisMunicipio(escolasUf, municipio, demanda) {
   if (!municipio || !demanda) return null;
   const alvo = municipio.trim().toLocaleLowerCase('pt-BR');

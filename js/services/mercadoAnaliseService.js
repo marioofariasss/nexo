@@ -200,7 +200,7 @@ export function gerarAnaliseCritica({ escolas, scoreOportunidade, demandaEscolar
   if (semDadosComerciais > 0) {
     limitacoesDados.push(`${fmtIntLocal(semDadosComerciais)} de ${fmtIntLocal(escolas.length)} escolas na região (${pctSemDados}%) não têm ticket médio nem matrículas conhecidas (descobertas via mapeamento, fora do Censo) — os números de ticket médio e faturamento potencial desta análise são calculados só sobre as que têm dado, não sobre a região inteira.`);
   }
-  if (raioKm <= 2) {
+  if (Number.isFinite(raioKm) && raioKm <= 2) {
     limitacoesDados.push(`Raio de ${raioKm}km é pequeno — bom pra um bairro específico, mas a amostra de escolas pode ser pequena demais pra generalizar sobre a região toda. Considera repetir com um raio maior pra comparar.`);
   }
 
