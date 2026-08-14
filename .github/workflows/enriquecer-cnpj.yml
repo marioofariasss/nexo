@@ -12,7 +12,7 @@ on:
         required: true
         default: data/enriquecimento/fila_cnpj.json
   schedule:
-    - cron: "23 5 15 * *"
+    - cron: "23 5 5 * *"
 
 permissions:
   contents: write
@@ -28,12 +28,13 @@ jobs:
     env:
       FILA: ${{ inputs.arquivo_fila || 'data/enriquecimento/fila_cnpj.json' }}
       SNAPSHOT: ${{ inputs.snapshot || 'latest' }}
+      PYTHONUNBUFFERED: "1"
     steps:
       - name: Baixar o código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Preparar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -71,6 +72,7 @@ jobs:
       - name: Publicar somente resultados compactos
         shell: bash
         run: |
+          git pull --rebase origin main
           mkdir -p data/cnpj_candidatos
           cp "$RUNNER_TEMP/cnpj-candidatos"/*.json data/cnpj_candidatos/
           git config user.name "github-actions[bot]"
@@ -80,7 +82,14 @@ jobs:
             echo "Nenhuma alteração de candidatos." >> "$GITHUB_STEP_SUMMARY"
           else
             git commit -m "Atualiza candidatos CNPJ (${SNAPSHOT_REAL})"
-            git push
+            for tentativa in 1 2 3; do
+              if git push; then
+                exit 0
+              fi
+              echo "Branch avançou durante a execução; tentativa $tentativa de rebase."
+              git pull --rebase origin main
+            done
+            exit 1
           fi
 
       - name: Confirmar descarte da base bruta

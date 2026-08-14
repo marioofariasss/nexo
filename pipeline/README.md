@@ -83,7 +83,7 @@ e-mail. O dump fica em `.cache/` e nunca deve ser versionado.
 
 ## Automação sem armazenamento local
 
-O workflow `.github/workflows/enriquecer-cnpj.yml` executa no dia 15 de cada
+O workflow `.github/workflows/enriquecer-cnpj.yml` executa no dia 5 de cada
 mês e também pode ser iniciado manualmente na aba **Actions** do GitHub. Ele:
 
 1. lê `data/enriquecimento/fila_cnpj.json`;
