@@ -78,18 +78,14 @@ formulário da kedu não são realizados silenciosamente.
 
 ### Lote contínuo de 10
 
-O botão **Produzir lote de 10** trabalha primeiro as candidatas já descobertas
-e só volta à descoberta territorial quando a fila existente se esgota. Para
-cada escola ele pesquisa fontes públicas, registra evidências, valida CNPJ,
-confirma escola privada de ensino regular e tenta completar os cinco campos da
-kedu. A qualificação automática só ocorre com confiança média/alta, ao menos
-duas fontes e todos os campos obrigatórios válidos.
+O botão **Solicitar lote ao Codex** registra a demanda operacional. O Codex
+trabalha primeiro as candidatas já descobertas e só volta à descoberta
+territorial quando a fila existente se esgota. Para cada escola ele pesquisa
+fontes públicas, registra evidências, valida CNPJ, confirma escola privada de
+ensino regular e tenta completar os cinco campos da kedu.
 
-A busca exige uma chave do Gemini em **Configurações → Busca automática de
-redes sociais**. Sem a chave, a execução agora é interrompida com uma mensagem
-clara; ela não registra mais descoberta simples como se o enriquecimento tivesse
-sido concluído. Três falhas consecutivas ou o limite seguro de consultas também
-interrompem o lote e deixam um log reprocessável.
+Esse fluxo não exige Gemini nem chave de inteligência artificial no navegador.
+O lote fica pronto para revisão e confirmação humana antes da transmissão.
 
 O envio ao formulário da kedu continua dependendo da confirmação do lote e da
 resposta de sucesso do próprio site. O Hunter nunca marca uma escola como

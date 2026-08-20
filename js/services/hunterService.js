@@ -76,6 +76,17 @@ export async function salvarConfiguracao(config) {
   await registrarLog('territorio', 'Configuração operacional atualizada.');
 }
 
+export async function solicitarLoteCodex({ territorioId = '', minimo = 10, origem = 'interface' } = {}) {
+  const solicitacao = {
+    id: id('codex'), territorioId,
+    minimo: Math.max(1, Number(minimo) || 10),
+    origem, status: 'pendente', criadoEm: agora(),
+  };
+  await setMeta('hunter_solicitacao_codex', solicitacao);
+  await registrarLog('enriquecimento', `Solicitação enviada ao Codex: investigar e preparar ${solicitacao.minimo} escolas para revisão e envio à kedu.`, { detalhes: solicitacao });
+  return solicitacao;
+}
+
 export async function garantirTerritoriosIniciais() {
   const existentes = await getAll('hunterTerritorios');
   if (existentes.length) return existentes;

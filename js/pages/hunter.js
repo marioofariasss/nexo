@@ -2,9 +2,9 @@ import { montarLayout } from '../components/layout.js';
 import { exportarCsv } from '../utils/csv.js';
 import {
   AGENTES_HUNTER, KEDU_FORM_URL, adicionarEvidencia, adicionarTerritorio, confirmarEnvioKedu,
-  criarLeadManual, definirLeadEspelho, descartarLead, enriquecerLeadAutomaticamente, executarCicloTerritorial, executarLoteQualificado, gerarRelatorio, historicoLead,
+  criarLeadManual, definirLeadEspelho, descartarLead, enriquecerLeadAutomaticamente, executarCicloTerritorial, gerarRelatorio, historicoLead,
   listarLeads, listarLogs, listarTerritorios, obterConfiguracao, obterLead, obterLeadEspelho, prepararEnvioKedu,
-  qualificarLead, registrarFalhaEnvioKedu, reprocessarRun, salvarConfiguracao, salvarLead, validarParaKedu,
+  qualificarLead, registrarFalhaEnvioKedu, reprocessarRun, salvarConfiguracao, salvarLead, solicitarLoteCodex, validarParaKedu,
 } from '../services/hunterService.js';
 
 montarLayout({ paginaAtiva: 'hunter', titulo: 'Nexo Hunter', prefixo: '../' });
@@ -143,7 +143,7 @@ function renderVisao() {
 
     <div class="hunter-grid-main">
       <section class="card hunter-territorio-atual">
-        <div class="hunter-card-head"><div><h2><i class="fa-solid fa-location-crosshairs"></i> Território em operação</h2><p>Memória ativa evita repetir buscas já esgotadas</p></div>${atual ? `<button class="btn btn-primary" data-run="${atual.id}"><i class="fa-solid fa-play"></i> Produzir lote de 10</button>` : ''}</div>
+        <div class="hunter-card-head"><div><h2><i class="fa-solid fa-location-crosshairs"></i> Território em operação</h2><p>Memória ativa evita repetir buscas já esgotadas</p></div>${atual ? `<button class="btn btn-primary" data-run="${atual.id}"><i class="fa-solid fa-robot"></i> Solicitar lote ao Codex</button>` : ''}</div>
         ${atual ? `<div class="hunter-location"><div><span>${esc(atual.uf)}</span><strong>${esc(atual.municipio)}</strong><small>${atual.ciclos} ciclos · última busca ${fmtData(atual.ultimaBuscaEm, true)}</small></div><div class="hunter-coverage"><strong>${fmtPct(atual.cobertura)}</strong><span>cobertura estimada</span></div></div>
         <div class="hunter-progress is-territory"><span style="width:${atual.cobertura}%"></span></div>
         <div class="hunter-territory-stats"><span><b>${atual.encontrados}</b> encontrados</span><span><b>${atual.novos}</b> novos</span><span><b>${atual.ciclosSemNovidade}</b> ciclos sem novidade</span></div>` : '<div class="empty-state"><h2>Fila territorial concluída</h2><p>Adicione o próximo município para continuar.</p></div>'}
@@ -238,16 +238,10 @@ function ligarAcoesComuns(raiz) {
 }
 
 async function executarCiclo(territorioId, botao) {
-  const original = botao.innerHTML; botao.disabled = true; botao.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Preparando lote 0/10';
+  const original = botao.innerHTML; botao.disabled = true; botao.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Registrando solicitação';
   try {
-    const resultado = await executarLoteQualificado({ minimo: 10, onProgresso: (progresso) => {
-      const escola = progresso.escola ? ` · ${progresso.escola.slice(0, 24)}` : '';
-      botao.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${progresso.qualificadas}/${progresso.alvo} · ${progresso.consultas || 0} pesquisas${esc(escola)}`;
-    } });
-    const pronta = resultado.qualificadas.length >= resultado.alvo;
-    alert(pronta
-      ? `Lote concluído: ${resultado.qualificadas.length} escolas qualificadas e prontas para envio à kedu. Revise e confirme o envio do lote.`
-      : `Lote encerrado com segurança: ${resultado.qualificadas.length}/${resultado.alvo} qualificadas, ${resultado.consultas} investigadas, ${resultado.descartadas.length} descartadas e ${resultado.falhas.length} falhas. Motivo: ${resultado.motivoParada}.`);
+    await solicitarLoteCodex({ territorioId, minimo: 10 });
+    alert('Solicitação registrada. O Codex fará a investigação pública, preencherá as evidências e deixará o lote pronto para sua confirmação antes do envio à kedu.');
     await carregar();
   } catch (erro) {
     alert(`O lote não foi concluído: ${erro.message}`);
@@ -384,7 +378,7 @@ async function verificarExecucaoAutomatica() {
   if (!territorio || !estado.config.ativo) return;
   localStorage.setItem(chave, 'executando');
   try {
-    await executarLoteQualificado({ minimo: 10 });
+    await solicitarLoteCodex({ territorioId: territorio.id, minimo: 10, origem: 'agendamento_9h' });
     localStorage.setItem(chave, 'concluido');
     await carregar();
   } catch (erro) {
