@@ -403,6 +403,105 @@ export async function enriquecerLeadAutomaticamente(leadId) {
   return salvarLead(proximo, { acao: 'investigado_automaticamente', usuario: 'Agente de investigação' });
 }
 
+function avaliacaoParaQualificacaoAutomatica(lead) {
+  const validacao = validarParaKedu(lead);
+  const investigacao = lead.investigacaoAutomatica || {};
+  const evidencias = (lead.evidencias || []).filter((item) => item.url);
+  const confiancaAceita = ['media', 'alta'].includes(investigacao.confianca);
+  const privadaConfirmada = investigacao.privadaRegular === 'sim';
+  const semDuvidaDuplicidade = lead.status !== 'revisao_duplicidade';
+  const nomeUtil = !/escola sem nome|auto escola/i.test(lead.nome || '');
+  const pronta = Boolean(lead.classificacao?.elegivel && validacao.pronto && confiancaAceita && privadaConfirmada && semDuvidaDuplicidade && nomeUtil && evidencias.length >= 2);
+  return {
+    pronta, validacao, evidencias: evidencias.length,
+    motivos: [
+      !lead.classificacao?.elegivel && 'fora do escopo',
+      !validacao.pronto && `faltam ${validacao.faltantes.join(', ')}`,
+      !confiancaAceita && 'confiança insuficiente',
+      !privadaConfirmada && 'natureza privada regular não confirmada',
+      !semDuvidaDuplicidade && 'possível duplicidade',
+      !nomeUtil && 'identidade insuficiente',
+      evidencias.length < 2 && 'menos de duas fontes públicas',
+    ].filter(Boolean),
+  };
+}
+
+export async function executarLoteQualificado({ minimo = 10, onProgresso = () => {} } = {}) {
+  const busca = await getConfigBuscaSocial();
+  if (!busca.chaveGemini) {
+    throw new Error('O enriquecimento não iniciou porque a chave do Gemini não está configurada. Abra Configurações → Busca automática de redes sociais, informe a chave e execute novamente.');
+  }
+  const alvo = Math.max(1, Number(minimo) || 10);
+  const tentados = new Set();
+  const qualificadas = [];
+  const descartadas = [];
+  const falhas = [];
+  let consultas = 0;
+  let ciclos = 0;
+  let falhasConsecutivas = 0;
+  await registrarLog('territorio', `Lote contínuo iniciado com meta de ${alvo} escolas qualificadas e prontas para kedu.`);
+
+  while (qualificadas.length < alvo && consultas < 100) {
+    let leads = await listarLeads();
+    let candidatas = leads
+      .filter((lead) => lead.status === 'revisao' && lead.classificacao?.elegivel && !tentados.has(lead.id))
+      .filter((lead) => !/escola sem nome|auto escola/i.test(lead.nome || ''))
+      .sort((a, b) => Number(b.qualificacao?.icp || 0) - Number(a.qualificacao?.icp || 0));
+
+    if (!candidatas.length) {
+      const territorio = (await listarTerritorios()).find((item) => item.status === 'em_andamento');
+      if (!territorio) break;
+      onProgresso({ fase: 'descoberta', qualificadas: qualificadas.length, alvo, consultas, ciclos });
+      const ciclo = await executarCicloTerritorial(territorio.id);
+      ciclos += 1;
+      if (!ciclo.candidatos.length && ciclos >= 3) {
+        const restante = (await listarTerritorios()).some((item) => ['em_andamento', 'na_fila'].includes(item.status));
+        if (!restante) break;
+      }
+      leads = await listarLeads();
+      candidatas = leads.filter((lead) => lead.status === 'revisao' && lead.classificacao?.elegivel && !tentados.has(lead.id));
+      if (!candidatas.length) continue;
+    }
+
+    for (const candidata of candidatas) {
+      if (qualificadas.length >= alvo || consultas >= 100) break;
+      tentados.add(candidata.id);
+      consultas += 1;
+      onProgresso({ fase: 'enriquecimento', escola: candidata.nome, qualificadas: qualificadas.length, alvo, consultas, ciclos });
+      try {
+        let atualizada = candidata.investigacaoAutomatica ? candidata : await enriquecerLeadAutomaticamente(candidata.id);
+        falhasConsecutivas = 0;
+        if (atualizada.status === 'descartada') {
+          descartadas.push({ id: atualizada.id, nome: atualizada.nome, motivo: atualizada.motivoDescarte });
+          continue;
+        }
+        const avaliacao = avaliacaoParaQualificacaoAutomatica(atualizada);
+        if (!avaliacao.pronta) {
+          atualizada.qualificacaoAutomatica = { pronta: false, motivos: avaliacao.motivos, avaliadaEm: agora() };
+          await salvarLead(atualizada, { acao: 'aguardando_complemento', usuario: 'Agente de classificação' });
+          continue;
+        }
+        atualizada.status = 'qualificada';
+        atualizada.qualificadoEm = agora();
+        atualizada.qualificacaoAutomatica = { pronta: true, motivos: [], avaliadaEm: agora(), confianca: atualizada.investigacaoAutomatica?.confianca };
+        atualizada = await salvarLead(atualizada, { acao: 'qualificado_automaticamente', usuario: 'Agente de classificação' });
+        qualificadas.push(atualizada);
+        onProgresso({ fase: 'qualificada', escola: atualizada.nome, qualificadas: qualificadas.length, alvo, consultas, ciclos });
+      } catch (erro) {
+        falhas.push({ id: candidata.id, nome: candidata.nome, erro: erro.message });
+        falhasConsecutivas += 1;
+        await registrarLog('enriquecimento', `Falha no lote para ${candidata.nome}: ${erro.message}`, { entidadeId: candidata.id, nivel: 'erro' });
+        if (falhasConsecutivas >= 3) throw new Error(`O lote foi interrompido após três falhas consecutivas da fonte pública. Último erro: ${erro.message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  }
+
+  const motivoParada = qualificadas.length >= alvo ? 'meta_atingida' : consultas >= 100 ? 'limite_seguro_de_consultas' : 'territorios_esgotados';
+  await registrarLog('relatorios', `Lote encerrado: ${qualificadas.length}/${alvo} qualificadas, ${consultas} investigadas, ${descartadas.length} descartadas e ${falhas.length} falhas.`, { detalhes: { motivoParada } });
+  return { alvo, qualificadas, descartadas, falhas, consultas, ciclos, motivoParada, prontasParaEnvio: qualificadas.map((lead) => ({ id: lead.id, ...validarParaKedu(lead).campos })) };
+}
+
 export async function excluirLead(leadId) {
   await deleteRecord('hunterLeads', leadId);
   await registrarLog('deduplicacao', 'Candidato removido da fila.', { entidadeId: leadId, nivel: 'atencao' });
