@@ -419,7 +419,7 @@ export function validarParaKedu(lead) {
   if (campos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email)) faltantes.push('email');
   const papeisKedu = ['Mantenedor(a)', 'Diretor(a)', 'Coordenador(a)', 'Secretário(a)', 'Professor(a)', 'Outro'];
   const cargo = String(campos.role || '').toLowerCase();
-  if (/mantenedor|propriet[aá]rio|s[oó]cio|fundador/.test(cargo)) campos.role = 'Mantenedor(a)';
+  if (/mantenedor|propriet[aá]ri[oa]|s[oó]ci[oa]|fundador/.test(cargo)) campos.role = 'Mantenedor(a)';
   else if (/diretor/.test(cargo)) campos.role = 'Diretor(a)';
   else if (/coordenador/.test(cargo)) campos.role = 'Coordenador(a)';
   else if (/secret[aá]ri/.test(cargo)) campos.role = 'Secretário(a)';
