@@ -25,7 +25,7 @@
  */
 
 const DB_NAME = 'kedu_crm';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const CORES_PADRAO = ['#0F6E56', '#378ADD', '#7F77DD', '#D85A30', '#D4537E', '#639922', '#BA7517', '#5F5E5A'];
 
@@ -112,6 +112,39 @@ export function openDB() {
 
       if (!db.objectStoreNames.contains('regioesSalvas')) {
         db.createObjectStore('regioesSalvas', { keyPath: 'id' });
+      }
+
+      // Nexo Hunter: operação de prospecção fora da base INEP. Essas stores
+      // ficam separadas da base fria para preservar candidatos, evidências,
+      // revisões, execuções e a memória territorial.
+      if (!db.objectStoreNames.contains('hunterLeads')) {
+        const leads = db.createObjectStore('hunterLeads', { keyPath: 'id' });
+        leads.createIndex('status', 'status', { unique: false });
+        leads.createIndex('uf', 'uf', { unique: false });
+        leads.createIndex('municipio', 'municipio', { unique: false });
+        leads.createIndex('criadoEm', 'criadoEm', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('hunterTerritorios')) {
+        const territorios = db.createObjectStore('hunterTerritorios', { keyPath: 'id' });
+        territorios.createIndex('status', 'status', { unique: false });
+        territorios.createIndex('uf', 'uf', { unique: false });
+        territorios.createIndex('ordem', 'ordem', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('hunterRuns')) {
+        const runs = db.createObjectStore('hunterRuns', { keyPath: 'id' });
+        runs.createIndex('status', 'status', { unique: false });
+        runs.createIndex('iniciadoEm', 'iniciadoEm', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('hunterLogs')) {
+        const logs = db.createObjectStore('hunterLogs', { keyPath: 'logId', autoIncrement: true });
+        logs.createIndex('agente', 'agente', { unique: false });
+        logs.createIndex('entidadeId', 'entidadeId', { unique: false });
+        logs.createIndex('criadoEm', 'criadoEm', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('hunterReviews')) {
+        const reviews = db.createObjectStore('hunterReviews', { keyPath: 'reviewId', autoIncrement: true });
+        reviews.createIndex('leadId', 'leadId', { unique: false });
+        reviews.createIndex('criadoEm', 'criadoEm', { unique: false });
       }
 
       if (!db.objectStoreNames.contains('meta')) {

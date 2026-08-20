@@ -39,7 +39,7 @@ export async function buscaSocialConfigurada() {
   return Boolean(config.chaveGemini);
 }
 
-async function chamarGeminiComBusca(prompt, chave) {
+export async function chamarGeminiComBusca(prompt, chave) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`;
   let resposta;
   try {

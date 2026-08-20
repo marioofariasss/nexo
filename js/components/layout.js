@@ -7,6 +7,7 @@ const ITENS_NAV = [
   { href: 'pages/inteligencia.html', icone: '&#128200;', label: 'Inteligência', chave: 'inteligencia' },
   { href: 'pages/busca.html', icone: '&#128269;', label: 'Base de Escolas', chave: 'busca' },
   { href: 'pages/mercado.html', icone: '&#128506;', label: 'Mapear Mercado', chave: 'mercado' },
+  { href: 'pages/hunter.html', icone: '&#127919;', label: 'Nexo Hunter', chave: 'hunter' },
   { href: 'pages/enriquecimento.html', icone: '&#128295;', label: 'Enriquecimento', chave: 'enriquecimento' },
   { href: 'pages/config.html', icone: '&#9881;', label: 'Configurações', chave: 'config' },
 ];
